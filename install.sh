@@ -388,7 +388,7 @@ enable_hook() {
 import json
 with open('$SETTINGS') as f:
     d = json.load(f)
-hook_entry = {'matcher': {}, 'hooks': [{'type': 'command', 'command': '$HOOK_SCRIPT', 'timeout': 30}]}
+hook_entry = {'matcher': '*', 'hooks': [{'type': 'command', 'command': '$HOOK_SCRIPT', 'timeout': 30}]}
 if 'hooks' not in d:
     d['hooks'] = {}
 pre = d['hooks'].get('PreToolUse', [])
@@ -616,7 +616,7 @@ import json, os
 p = os.path.expanduser('$SETTINGS')
 with open(p) as f:
     d = json.load(f)
-hook_entry = {'matcher': {}, 'hooks': [{'type': 'command', 'command': '$HOOK_SCRIPT', 'timeout': 30}]}
+hook_entry = {'matcher': '*', 'hooks': [{'type': 'command', 'command': '$HOOK_SCRIPT', 'timeout': 30}]}
 if 'hooks' not in d:
     d['hooks'] = {}
 pre = d['hooks'].get('PreToolUse', [])
