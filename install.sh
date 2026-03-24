@@ -52,29 +52,32 @@ step()  { echo -e "\n  ${C1}${BOLD}▸${NC} ${BOLD}$1${NC}"; }
 # i18n: detect locale
 is_zh() { [[ "${LANG:-}${LC_ALL:-}" =~ zh ]]; }
 
-# --- Animated banner ---
+# --- Animated ASCII Art banner with gradient ---
+_gradient_line() {
+    local line="$1" start="${2:-39}" count="${3:-6}"
+    printf "  "
+    for ((i=0; i<${#line}; i++)); do
+        local c=$(( start + (i % count) ))
+        printf "\033[1;38;5;${c}m%s" "${line:$i:1}"
+    done
+    printf "${NC}\n"
+}
+
 echo ""
-sleep 0.1
-echo -e "  ${DIM}╭─────────────────────────────────────────────╮${NC}"
-sleep 0.05
-echo -e "  ${DIM}│${NC}                                             ${DIM}│${NC}"
-printf "  ${DIM}│${NC}   "
-_type "⚡ " 0.05
-printf "${C1}${BOLD}"
-_type "Risk Guard" 0.04
-printf "${NC}"
-_type "  " 0.02
-printf "${DIM}"
-_type "for Claude Code" 0.03
-printf "${NC}    ${DIM}│${NC}\n"
-sleep 0.1
-printf "  ${DIM}│${NC}   ${DIM}${ITALIC}"
-_type "AI-Powered Risk Assessment" 0.02
-printf "  v${RISK_GUARD_VERSION}"
-printf "${NC}    ${DIM}│${NC}\n"
-sleep 0.05
-echo -e "  ${DIM}│${NC}                                             ${DIM}│${NC}"
-echo -e "  ${DIM}╰─────────────────────────────────────────────╯${NC}"
+{
+cat << 'BANNER'
+    ____  _      __       ______                     __
+   / __ \(_)____/ /__    / ____/_  ______ __________/ /
+  / /_/ / / ___/ //_/   / / __/ / / / __ `/ ___/ __  /
+ / _, _/ (__  ) ,<     / /_/ / /_/ / /_/ / /  / /_/ /
+/_/ |_/_/____/_/|_|    \____/\__,_/\__,_/_/   \__,_/
+BANNER
+} | while IFS= read -r line; do
+    _gradient_line "$line" 39 6
+    sleep 0.04
+done
+echo ""
+printf "  ${DIM}${ITALIC}  ⚡ AI-Powered Risk Assessment for Claude Code  v${RISK_GUARD_VERSION}${NC}\n"
 echo ""
 
 if is_zh; then
@@ -586,6 +589,24 @@ _gradient() {
     printf "${NC}"
 }
 
+# Small ASCII art logo (figlet -f small "Risk Guard")
+_logo() {
+    local lines=(
+        ' ___ _    _      ___                  _ '
+        '| _ (_)__| |__  / __|_  _ __ _ _ _ __| |'
+        '|   / (_-< / / | (_ | || / _` | '\''_/ _` |'
+        '|_|_\_/__/_\_\  \___|\_,_\__,_|_| \__,_|'
+    )
+    for line in "${lines[@]}"; do
+        printf "  "
+        for ((i=0; i<${#line}; i++)); do
+            local c=$(( 39 + (i % 6) ))
+            printf "\033[1;38;5;${c}m%s" "${line:$i:1}"
+        done
+        printf "${NC}\n"
+    done
+}
+
 # Animated progress bar: _abar <value> <max> <width> <color>
 _abar() {
     local val=$1 max=$2 width=${3:-20} color="${4:-$C2}"
@@ -747,7 +768,7 @@ disable_hook() {
 
 show_status() {
     echo ""
-    printf "  "; _gradient "Risk Guard" 39 6; echo ""
+    _logo
     echo ""
     if has_hook; then
         echo -e "  ${GREEN}●${NC} ${BOLD}Active${NC}  ${DIM}─── hook is running${NC}"
@@ -1053,7 +1074,7 @@ update_cmd() {
 
 usage() {
     echo ""
-    printf "  "; _gradient "Risk Guard" 39 6; echo ""
+    _logo
     echo ""
     if _is_zh; then echo -e "  ${DIM}用法:${NC} ${BOLD}risk-guard${NC} ${DIM}<command>${NC}"
     else echo -e "  ${DIM}Usage:${NC} ${BOLD}risk-guard${NC} ${DIM}<command>${NC}"; fi
@@ -1087,7 +1108,7 @@ case "${1:-status}" in
     rules|rule)     shift; rules_cmd "$@" ;;
     update|upgrade) update_cmd ;;
     uninstall)      uninstall_cmd ;;
-    version|-V|--version) echo -e "\n  $(_gradient "Risk Guard" 39 6) ${DIM}v${VERSION}${NC}\n" ;;
+    version|-V|--version) echo ""; _logo; echo -e "  ${DIM}v${VERSION}${NC}"; echo "" ;;
     help|-h|--help) usage ;;
     *)              if _is_zh; then echo "未知命令: $1"; else echo "Unknown command: $1"; fi; usage; exit 1 ;;
 esac
