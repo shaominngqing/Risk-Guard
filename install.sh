@@ -23,6 +23,9 @@ warn()  { echo -e "  ${YELLOW}⚠${NC} $1"; }
 fail()  { echo -e "  ${RED}✗${NC} $1"; exit 1; }
 step()  { echo -e "\n${BOLD}${CYAN}▸ $1${NC}"; }
 
+# i18n: detect locale
+is_zh() { [[ "${LANG:-}${LC_ALL:-}" =~ zh ]]; }
+
 echo ""
 echo -e "${BOLD}  ╭───────────────────────────────────────────╮${NC}"
 echo -e "${BOLD}  │                                           │${NC}"
@@ -31,11 +34,17 @@ echo -e "${BOLD}  │   ${DIM}AI-Powered Risk Assessment Hook${NC}${BOLD}       
 echo -e "${BOLD}  │                                           │${NC}"
 echo -e "${BOLD}  ╰───────────────────────────────────────────╯${NC}"
 
-step "检查环境"
-command -v python3 >/dev/null 2>&1 && ok "python3" || fail "需要 python3"
-command -v claude  >/dev/null 2>&1 && ok "claude CLI" || warn "未检测到 claude 命令（AI 评估将不可用）"
-
-step "准备目录"
+if is_zh; then
+    step "检查环境"
+    command -v python3 >/dev/null 2>&1 && ok "python3" || fail "需要 python3"
+    command -v claude  >/dev/null 2>&1 && ok "claude CLI" || warn "未检测到 claude 命令（AI 评估将不可用）"
+    step "准备目录"
+else
+    step "Check environment"
+    command -v python3 >/dev/null 2>&1 && ok "python3" || fail "python3 is required"
+    command -v claude  >/dev/null 2>&1 && ok "claude CLI" || warn "claude CLI not found (AI assessment will be unavailable)"
+    step "Prepare directories"
+fi
 mkdir -p "$HOOKS_DIR"
 ([ ! -f "$SETTINGS" ] || [ ! -s "$SETTINGS" ]) && echo '{}' > "$SETTINGS"
 ok "$HOOKS_DIR"
@@ -60,10 +69,13 @@ cat > "$HOOK_SCRIPT" << 'HOOK__EOF'
 set -euo pipefail
 
 CACHE_DIR="$HOME/.claude/hooks/cache"
-CACHE_TTL=86400  # 缓存有效期：24小时
+CACHE_TTL=86400  # 24h
 LOG_FILE="$HOME/.claude/hooks/risk-guard.log"
 LOG_MAX_LINES=500
 mkdir -p "$CACHE_DIR"
+
+# i18n
+_is_zh() { [[ "${LANG:-}${LC_ALL:-}" =~ zh ]]; }
 
 INPUT=$(cat)
 
@@ -125,13 +137,23 @@ log_entry() {
 emit() {
     local level="$1" reason="$2" source="${3:-}"
     local level_tag detail
-    case "$level" in
-        0) level_tag="LOW " ; output_decision "allow" "[低风险] $reason" ;;
-        1) level_tag="MED " ; notify "⚠️ Claude Code" "已自动放行" "$reason"
-           output_decision "allow" "[中风险] $reason" ;;
-        2) level_tag="HIGH" ; notify "🚨 Claude Code 警告" "需要确认" "$reason" "Funk"
-           output_decision "ask" "[高风险] $reason" ;;
-    esac
+    if _is_zh; then
+        case "$level" in
+            0) level_tag="LOW " ; output_decision "allow" "[低风险] $reason" ;;
+            1) level_tag="MED " ; notify "⚠️ Claude Code" "已自动放行" "$reason"
+               output_decision "allow" "[中风险] $reason" ;;
+            2) level_tag="HIGH" ; notify "🚨 Claude Code" "需要确认" "$reason" "Funk"
+               output_decision "ask" "[高风险] $reason" ;;
+        esac
+    else
+        case "$level" in
+            0) level_tag="LOW " ; output_decision "allow" "[Low] $reason" ;;
+            1) level_tag="MED " ; notify "⚠️ Claude Code" "Auto-allowed" "$reason"
+               output_decision "allow" "[Medium] $reason" ;;
+            2) level_tag="HIGH" ; notify "🚨 Claude Code" "Confirmation needed" "$reason" "Funk"
+               output_decision "ask" "[High] $reason" ;;
+        esac
+    fi
 
     # 日志
     if [ "$TOOL_NAME" = "Bash" ]; then
@@ -264,18 +286,20 @@ fi
 # 所有 Bash 命令一律交给 AI + 缓存，不做人为判断
 # =============================================================================
 fast_check() {
-    # --- 工具本身是只读的，不管参数是什么都安全 ---
+    local _ro _task _edit
+    if _is_zh; then _ro="只读操作"; _task="任务管理操作"; _edit="普通文件编辑"
+    else _ro="Read-only operation"; _task="Task management"; _edit="Normal file edit"; fi
+
     case "$TOOL_NAME" in
         Read|Glob|Grep|Agent|AskUserQuestion|EnterPlanMode|ExitPlanMode|WebFetch|Skill)
-            echo "0|只读操作"; return 0 ;;
+            echo "0|$_ro"; return 0 ;;
         TaskCreate|TaskGet|TaskList|TaskOutput|TaskUpdate|TaskStop)
-            echo "0|任务管理操作"; return 0 ;;
+            echo "0|$_task"; return 0 ;;
     esac
 
-    # --- 文件编辑：普通源代码文件直接放行，敏感文件交 AI ---
     if [ "$TOOL_NAME" = "Edit" ] || [ "$TOOL_NAME" = "Write" ] || [ "$TOOL_NAME" = "NotebookEdit" ]; then
         if [ -n "$FILE_PATH" ] && ! echo "$FILE_PATH" | grep -qiE '(\.env|credentials|secret|password|token|\.pem|\.key|id_rsa|authorized_keys|sudoers|shadow|passwd|\.github/workflows|\.gitlab-ci|Jenkinsfile)'; then
-            echo "0|普通文件编辑: $FILE_PATH"; return 0
+            echo "0|$_edit: $FILE_PATH"; return 0
         fi
     fi
 
@@ -307,9 +331,12 @@ ai_assess() {
         *)       description="Tool: $TOOL_NAME, Input: $(echo "$TOOL_INPUT" | head -c 500)" ;;
     esac
 
+    local lang_hint="in English"
+    _is_zh && lang_hint="in Chinese"
+
     local ai_result
     ai_result=$(env -u CLAUDECODE claude -p --no-session-persistence \
-      --system-prompt 'You are a JSON-only risk assessment API. You MUST output exactly one JSON object per request. No markdown, no explanation, no conversation. Output format: {"level":<0|1|2>,"reason":"<10 words max in Chinese>"}' \
+      --system-prompt "You are a JSON-only risk assessment API. You MUST output exactly one JSON object per request. No markdown, no explanation, no conversation. Output format: {\"level\":<0|1|2>,\"reason\":\"<10 words max $lang_hint>\"}" \
 "Assess risk level of this dev operation:
 0=safe(read-only, builds, tests, normal edits)
 1=medium(side effects but recoverable: pkg install, git push, mv, config edits)
@@ -335,8 +362,9 @@ Operation: $description" 2>/dev/null)
 
         echo "${level}|${reason}"
     else
-        # AI 调用失败 → 回退到中风险（不缓存失败）
-        echo "1|AI评估失败，保守处理: $description"
+        # AI call failed → fallback to medium risk (don't cache failures)
+        if _is_zh; then echo "1|AI评估失败，保守处理: $description"
+        else echo "1|AI assessment failed, conservative fallback: $description"; fi
     fi
 }
 
@@ -368,8 +396,8 @@ emit "$LEVEL" "$REASON" "AI"
 HOOK__EOF
 chmod +x "$HOOK_SCRIPT"
 
-step "安装组件"
-ok "风险评估引擎  risk-guard.sh"
+if is_zh; then step "安装组件"; ok "风险评估引擎  risk-guard.sh"
+else step "Install components"; ok "Risk assessment engine  risk-guard.sh"; fi
 
 # ═══ 写入 risk-guard-ctl.sh ═══
 cat > "$CTL_SCRIPT" << 'CTL__EOF'
@@ -396,6 +424,85 @@ LOG_FILE="$HOME/.claude/hooks/risk-guard.log"
 
 ([ ! -f "$SETTINGS" ] || [ ! -s "$SETTINGS" ]) && echo '{}' > "$SETTINGS"
 
+# i18n
+_is_zh() { [[ "${LANG:-}${LC_ALL:-}" =~ zh ]]; }
+_t() {
+    local key="$1"
+    if _is_zh; then
+        case "$key" in
+            enabled)        echo "🟢 Risk Guard: 启用中" ;;
+            disabled)       echo "🔴 Risk Guard: 已禁用" ;;
+            cache_entries)  echo "   缓存条目" ;;
+            log_lines)     echo "   日志行数" ;;
+            already_on)    echo "⚡ Risk Guard 已经是启用状态" ;;
+            turned_on)     echo "✅ Risk Guard 已启用 (新会话生效)" ;;
+            already_off)   echo "⚡ Risk Guard 已经是禁用状态" ;;
+            turned_off)    echo "⛔ Risk Guard 已禁用 (新会话生效)" ;;
+            cache_cleared) echo "✅ 缓存已清空" ;;
+            cache_empty)   echo "📦 缓存为空" ;;
+            cache_stats)   echo "📦 缓存统计:" ;;
+            cache_count)   echo "   条目数" ;;
+            cache_size)    echo "   占用" ;;
+            cache_dir)     echo "   目录" ;;
+            cache_recent)  echo "   最近缓存的判断:" ;;
+            log_cleared)   echo "✅ 日志已清空" ;;
+            log_empty)     echo "📋 日志为空" ;;
+            log_recent)    echo "📋 最近" ;;
+            log_suffix)    echo "条日志:" ;;
+            uninstalling)  echo "正在卸载 Risk Guard..." ;;
+            uninstalled)   echo "✅ Risk Guard 已完全卸载" ;;
+            test_usage)    echo "用法: risk-guard test <bash command>" ;;
+            test_example)  echo "示例: risk-guard test rm -rf node_modules" ;;
+            help_title)    echo "Risk Guard — Claude Code AI 风险守卫" ;;
+            cmd_status)    echo "  status            查看状态" ;;
+            cmd_onoff)     echo "  on / off          启用 / 禁用" ;;
+            cmd_toggle)    echo "  toggle            切换开关" ;;
+            cmd_test)      echo "  test <cmd>        测试命令风险等级" ;;
+            cmd_cache)     echo "  cache [clear]     查看/清空缓存" ;;
+            cmd_log)       echo "  log [N|clear]     查看最近 N 条日志 / 清空日志" ;;
+            cmd_uninstall) echo "  uninstall         完全卸载" ;;
+            cmd_help)      echo "  help              显示此帮助" ;;
+            *)             echo "$key" ;;
+        esac
+    else
+        case "$key" in
+            enabled)        echo "🟢 Risk Guard: Enabled" ;;
+            disabled)       echo "🔴 Risk Guard: Disabled" ;;
+            cache_entries)  echo "   Cache entries" ;;
+            log_lines)     echo "   Log lines" ;;
+            already_on)    echo "⚡ Risk Guard is already enabled" ;;
+            turned_on)     echo "✅ Risk Guard enabled (takes effect in new sessions)" ;;
+            already_off)   echo "⚡ Risk Guard is already disabled" ;;
+            turned_off)    echo "⛔ Risk Guard disabled (takes effect in new sessions)" ;;
+            cache_cleared) echo "✅ Cache cleared" ;;
+            cache_empty)   echo "📦 Cache is empty" ;;
+            cache_stats)   echo "📦 Cache statistics:" ;;
+            cache_count)   echo "   Entries" ;;
+            cache_size)    echo "   Size" ;;
+            cache_dir)     echo "   Directory" ;;
+            cache_recent)  echo "   Recent cached decisions:" ;;
+            log_cleared)   echo "✅ Log cleared" ;;
+            log_empty)     echo "📋 Log is empty" ;;
+            log_recent)    echo "📋 Last" ;;
+            log_suffix)    echo "log entries:" ;;
+            uninstalling)  echo "Uninstalling Risk Guard..." ;;
+            uninstalled)   echo "✅ Risk Guard fully uninstalled" ;;
+            test_usage)    echo "Usage: risk-guard test <bash command>" ;;
+            test_example)  echo "Example: risk-guard test rm -rf node_modules" ;;
+            help_title)    echo "Risk Guard — AI Risk Assessment for Claude Code" ;;
+            cmd_status)    echo "  status            Show status" ;;
+            cmd_onoff)     echo "  on / off          Enable / disable" ;;
+            cmd_toggle)    echo "  toggle            Toggle on/off" ;;
+            cmd_test)      echo "  test <cmd>        Test a command's risk level" ;;
+            cmd_cache)     echo "  cache [clear]     View/clear cache" ;;
+            cmd_log)       echo "  log [N|clear]     View last N log entries / clear log" ;;
+            cmd_uninstall) echo "  uninstall         Completely uninstall" ;;
+            cmd_help)      echo "  help              Show this help" ;;
+            *)             echo "$key" ;;
+        esac
+    fi
+}
+
 has_hook() {
     python3 -c "
 import json
@@ -412,7 +519,7 @@ exit(1)" 2>/dev/null
 
 enable_hook() {
     python3 -c "
-import json
+import json, sys
 with open('$SETTINGS') as f:
     content = f.read().strip()
     d = json.loads(content) if content else {}
@@ -423,17 +530,17 @@ pre = d['hooks'].get('PreToolUse', [])
 for h in pre:
     for cmd in h.get('hooks', []):
         if 'risk-guard.sh' in cmd.get('command', ''):
-            print('⚡ Risk Guard 已经是启用状态'); exit(0)
+            sys.exit(1)
 pre.append(hook_entry)
 d['hooks']['PreToolUse'] = pre
 with open('$SETTINGS', 'w') as f:
-    json.dump(d, f, indent=2, ensure_ascii=False)
-print('✅ Risk Guard 已启用 (新会话生效)')"
+    json.dump(d, f, indent=2, ensure_ascii=False)" 2>/dev/null
+    if [ $? -eq 0 ]; then _t turned_on; else _t already_on; fi
 }
 
 disable_hook() {
     python3 -c "
-import json
+import json, sys
 with open('$SETTINGS') as f:
     content = f.read().strip()
     d = json.loads(content) if content else {}
@@ -447,7 +554,7 @@ for h in pre:
     if keep:
         new_pre.append(h)
 if not found:
-    print('⚡ Risk Guard 已经是禁用状态'); exit(0)
+    sys.exit(1)
 if new_pre:
     d['hooks']['PreToolUse'] = new_pre
 else:
@@ -455,31 +562,25 @@ else:
     if not d.get('hooks'):
         d.pop('hooks', None)
 with open('$SETTINGS', 'w') as f:
-    json.dump(d, f, indent=2, ensure_ascii=False)
-print('⛔ Risk Guard 已禁用 (新会话生效)')"
+    json.dump(d, f, indent=2, ensure_ascii=False)" 2>/dev/null
+    if [ $? -eq 0 ]; then _t turned_off; else _t already_off; fi
 }
 
 show_status() {
-    if has_hook; then
-        echo "🟢 Risk Guard: 启用中"
-    else
-        echo "🔴 Risk Guard: 已禁用"
-    fi
-    # 缓存统计
+    if has_hook; then _t enabled; else _t disabled; fi
     local count=0
     [ -d "$CACHE_DIR" ] && count=$(find "$CACHE_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')
-    echo "   缓存条目: $count"
-    # 日志行数
+    echo "$(_t cache_entries): $count"
     local log_lines=0
     [ -f "$LOG_FILE" ] && log_lines=$(wc -l < "$LOG_FILE" | tr -d ' ')
-    echo "   日志行数: $log_lines"
+    echo "$(_t log_lines): $log_lines"
 }
 
 test_command() {
     local cmd="$*"
     if [ -z "$cmd" ]; then
-        echo "用法: risk-guard test <bash command>"
-        echo "示例: risk-guard test rm -rf node_modules"
+        _t test_usage
+        _t test_example
         exit 1
     fi
 
@@ -513,23 +614,23 @@ cache_cmd() {
     case "${1:-}" in
         clear|clean)
             rm -rf "$CACHE_DIR"/*
-            echo "✅ 缓存已清空"
+            _t cache_cleared
             ;;
         *)
             if [ ! -d "$CACHE_DIR" ] || [ -z "$(ls -A "$CACHE_DIR" 2>/dev/null)" ]; then
-                echo "📦 缓存为空"
+                _t cache_empty
                 return
             fi
             local count
             count=$(find "$CACHE_DIR" -type f | wc -l | tr -d ' ')
             local size
             size=$(du -sh "$CACHE_DIR" 2>/dev/null | cut -f1)
-            echo "📦 缓存统计:"
-            echo "   条目数: $count"
-            echo "   占用:   $size"
-            echo "   目录:   $CACHE_DIR"
+            _t cache_stats
+            echo "$(_t cache_count): $count"
+            echo "$(_t cache_size):   $size"
+            echo "$(_t cache_dir):   $CACHE_DIR"
             echo ""
-            echo "   最近缓存的判断:"
+            _t cache_recent
             for f in $(ls -t "$CACHE_DIR" | head -10); do
                 local content age_s age_h
                 content=$(cat "$CACHE_DIR/$f")
@@ -558,15 +659,15 @@ log_cmd() {
     case "${1:-}" in
         clear|clean)
             > "$LOG_FILE"
-            echo "✅ 日志已清空"
+            _t log_cleared
             ;;
         *)
             if [ ! -f "$LOG_FILE" ] || [ ! -s "$LOG_FILE" ]; then
-                echo "📋 日志为空"
+                _t log_empty
                 return
             fi
             local n="${1:-20}"
-            echo "📋 最近 $n 条日志:"
+            echo "$(_t log_recent) $n $(_t log_suffix)"
             echo ""
             tail -n "$n" "$LOG_FILE"
             ;;
@@ -574,33 +675,32 @@ log_cmd() {
 }
 
 uninstall_cmd() {
-    echo "正在卸载 Risk Guard..."
+    _t uninstalling
     disable_hook 2>/dev/null
     for dir in /usr/local/bin /opt/homebrew/bin; do
         [ -L "$dir/risk-guard" ] && rm -f "$dir/risk-guard"
     done
     rm -rf "$CACHE_DIR"
     rm -f "$HOOK_SCRIPT" "$LOG_FILE"
-    # 最后删除自身
     local self="$HOME/.claude/hooks/risk-guard-ctl.sh"
-    echo "✅ Risk Guard 已完全卸载"
+    _t uninstalled
     rm -f "$self"
 }
 
 usage() {
-    echo "Risk Guard — Claude Code AI 风险守卫"
+    _t help_title
     echo ""
-    echo "用法: risk-guard <command>"
+    if _is_zh; then echo "用法: risk-guard <command>"; else echo "Usage: risk-guard <command>"; fi
     echo ""
-    echo "命令:"
-    echo "  status            查看状态"
-    echo "  on / off          启用 / 禁用"
-    echo "  toggle            切换开关"
-    echo "  test <cmd>        测试命令风险等级"
-    echo "  cache [clear]     查看/清空缓存"
-    echo "  log [N|clear]     查看最近 N 条日志 / 清空日志"
-    echo "  uninstall         完全卸载"
-    echo "  help              显示此帮助"
+    if _is_zh; then echo "命令:"; else echo "Commands:"; fi
+    _t cmd_status
+    _t cmd_onoff
+    _t cmd_toggle
+    _t cmd_test
+    _t cmd_cache
+    _t cmd_log
+    _t cmd_uninstall
+    _t cmd_help
 }
 
 case "${1:-status}" in
@@ -617,10 +717,11 @@ case "${1:-status}" in
 esac
 CTL__EOF
 chmod +x "$CTL_SCRIPT"
-ok "控制面板      risk-guard-ctl.sh"
+if is_zh; then ok "控制面板      risk-guard-ctl.sh"
+else ok "Control panel  risk-guard-ctl.sh"; fi
 
 # ═══ 全局命令 ═══
-step "注册全局命令"
+if is_zh; then step "注册全局命令"; else step "Register global command"; fi
 BIN_DIR=""
 if [ -d /opt/homebrew/bin ] && echo "$PATH" | grep -q "/opt/homebrew/bin"; then
     BIN_DIR="/opt/homebrew/bin"
@@ -629,13 +730,18 @@ elif [ -d /usr/local/bin ]; then
 fi
 
 if [ -n "$BIN_DIR" ]; then
-    ln -sf "$CTL_SCRIPT" "$BIN_DIR/risk-guard" 2>/dev/null && ok "risk-guard → $BIN_DIR/" || warn "请手动: ln -s $CTL_SCRIPT /usr/local/bin/risk-guard"
+    if is_zh; then
+        ln -sf "$CTL_SCRIPT" "$BIN_DIR/risk-guard" 2>/dev/null && ok "risk-guard → $BIN_DIR/" || warn "请手动: ln -s $CTL_SCRIPT /usr/local/bin/risk-guard"
+    else
+        ln -sf "$CTL_SCRIPT" "$BIN_DIR/risk-guard" 2>/dev/null && ok "risk-guard → $BIN_DIR/" || warn "Please run: ln -s $CTL_SCRIPT /usr/local/bin/risk-guard"
+    fi
 else
-    warn "请手动: alias risk-guard='$CTL_SCRIPT'"
+    if is_zh; then warn "请手动: alias risk-guard='$CTL_SCRIPT'"
+    else warn "Please run: alias risk-guard='$CTL_SCRIPT'"; fi
 fi
 
 # ═══ 注入 hooks 配置 ═══
-step "配置 Claude Code Hooks"
+if is_zh; then step "配置 Claude Code Hooks"; else step "Configure Claude Code Hooks"; fi
 python3 -c "
 import json, os
 p = os.path.expanduser('$SETTINGS')
@@ -655,13 +761,18 @@ d['hooks']['PreToolUse'] = pre
 with open(p, 'w') as f:
     json.dump(d, f, indent=2, ensure_ascii=False)
 "
-ok "PreToolUse hook 已注入 settings.json"
+ok "PreToolUse hook → settings.json"
 
 echo ""
 echo -e "${BOLD}  ╭───────────────────────────────────────────╮${NC}"
+if is_zh; then
 echo -e "${BOLD}  │  ${GREEN}安装完成！${NC}${BOLD}                                │${NC}"
+else
+echo -e "${BOLD}  │  ${GREEN}Install complete!${NC}${BOLD}                         │${NC}"
+fi
 echo -e "${BOLD}  ╰───────────────────────────────────────────╯${NC}"
 echo ""
+if is_zh; then
 echo -e "  ${BOLD}工作原理${NC}"
 echo ""
 echo -e "    ${DIM}只读工具${NC}  Read / Grep / Glob ...  ${GREEN}━━▸${NC} 直接放行"
@@ -675,4 +786,19 @@ echo ""
 echo -e "    ${CYAN}risk-guard${NC} ${DIM}help${NC}           查看所有命令"
 echo ""
 echo -e "  ${YELLOW}▸ 新开的 Claude Code 会话自动生效${NC}"
+else
+echo -e "  ${BOLD}How it works${NC}"
+echo ""
+echo -e "    ${DIM}Read-only${NC}  Read / Grep / Glob ...  ${GREEN}━━▸${NC} Allow"
+echo -e "    ${DIM}Edits   ${NC}  Normal source files      ${GREEN}━━▸${NC} Allow"
+echo -e "    ${DIM}Bash    ${NC}  All commands              ${CYAN}━━▸${NC} AI assess (~7s)"
+echo -e "    ${DIM}Repeat  ${NC}  Same pattern again        ${GREEN}━━▸${NC} Cache hit (0s)"
+echo -e "    ${DIM}Danger  ${NC}  rm -rf / force push ...   ${RED}━━▸${NC} Notify + confirm"
+echo ""
+echo -e "  ${BOLD}Commands${NC}"
+echo ""
+echo -e "    ${CYAN}risk-guard${NC} ${DIM}help${NC}           Show all commands"
+echo ""
+echo -e "  ${YELLOW}▸ Takes effect in new Claude Code sessions${NC}"
+fi
 echo ""
