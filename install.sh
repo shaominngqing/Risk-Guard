@@ -585,7 +585,7 @@ test_command() {
     fi
 
     local payload
-    payload=$(python3 -c "import json; print(json.dumps({'tool_name': 'Bash', 'tool_input': {'command': '$cmd'}}))")
+    payload=$(echo "$cmd" | python3 -c "import sys,json; print(json.dumps({'tool_name':'Bash','tool_input':{'command':sys.stdin.read().strip()}}))")
 
     local start end
     start=$(python3 -c "import time; print(time.time())")
@@ -594,20 +594,22 @@ test_command() {
     end=$(python3 -c "import time; print(time.time())")
 
     local elapsed
-    elapsed=$(python3 -c "print(f'{$end - $start:.1f}s')")
+    elapsed=$(python3 -c "import time; print(f'{$end - $start:.1f}s')")
 
-    python3 -c "
-import json, sys
+    echo "$result" | _RG_ELAPSED="$elapsed" python3 -c "
+import json, sys, os
+elapsed = os.environ.get('_RG_ELAPSED', '?')
+raw = sys.stdin.read().strip()
 try:
-    d = json.loads('''$result''')
+    d = json.loads(raw)
     o = d['hookSpecificOutput']
     decision = o['permissionDecision']
     reason = o['permissionDecisionReason']
     icons = {'allow': '✅', 'ask': '🚨', 'deny': '❌'}
-    print(f\"{icons.get(decision, '?')} {decision}  ({reason})  [{sys.argv[1]}]\")
+    print(f'{icons.get(decision, \"?\")} {decision}  ({reason})  [{elapsed}]')
 except:
-    print('⚠️  解析失败:', '''$result'''[:100])
-" "$elapsed"
+    print(f'⚠️  Parse error: {raw[:100]}')
+"
 }
 
 cache_cmd() {
@@ -713,7 +715,7 @@ case "${1:-status}" in
     log|logs)       shift; log_cmd "$@" ;;
     uninstall)      uninstall_cmd ;;
     help|-h|--help) usage ;;
-    *)              echo "未知命令: $1"; usage; exit 1 ;;
+    *)              if _is_zh; then echo "未知命令: $1"; else echo "Unknown command: $1"; fi; usage; exit 1 ;;
 esac
 CTL__EOF
 chmod +x "$CTL_SCRIPT"
