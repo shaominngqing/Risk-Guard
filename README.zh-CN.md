@@ -1,8 +1,18 @@
-# ⚡ Risk Guard for Claude Code
+<p align="center">
+  <img src="assets/banner.svg" alt="Risk Guard" width="800">
+</p>
 
-[English](./README.md) | 中文
+<p align="center">
+  <strong>为 Claude Code 打造的 AI 风险评估 Hook</strong><br>
+  <sub>自动判断每个操作的风险等级，决定放行、通知还是拦截。</sub>
+</p>
 
-为 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 打造的 AI 风险评估 Hook。自动判断每个操作的风险等级，决定放行、通知还是拦截。
+<p align="center">
+  <a href="./README.md">English</a> | 中文
+</p>
+
+<!-- 生成 GIF: brew install vhs && vhs demo.tape -->
+<!-- <p align="center"><img src="demo.gif" alt="demo" width="800"></p> -->
 
 ## 解决什么问题
 

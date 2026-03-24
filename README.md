@@ -1,8 +1,18 @@
-# ⚡ Risk Guard for Claude Code
+<p align="center">
+  <img src="assets/banner.svg" alt="Risk Guard" width="800">
+</p>
 
-English | [中文](./README.zh-CN.md)
+<p align="center">
+  <strong>AI-Powered Risk Assessment for Claude Code</strong><br>
+  <sub>Automatically evaluates every tool call — allow, notify, or block.</sub>
+</p>
 
-AI-powered risk assessment hook for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Automatically evaluates the risk level of every tool call — allow, notify, or block.
+<p align="center">
+  English | <a href="./README.zh-CN.md">中文</a>
+</p>
+
+<!-- Uncomment after generating: vhs demo.tape -->
+<!-- <p align="center"><img src="demo.gif" alt="demo" width="800"></p> -->
 
 ## The Problem
 
