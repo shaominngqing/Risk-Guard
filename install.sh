@@ -529,10 +529,18 @@ _t() {
             cmd_test)      echo "  test <cmd>        测试命令风险等级" ;;
             cmd_cache)     echo "  cache [clear]     查看/清空缓存" ;;
             cmd_log)       echo "  log [N|clear]     查看最近 N 条日志 / 清空日志" ;;
+            cmd_stats)     echo "  stats             查看统计数据" ;;
             cmd_rules)     echo "  rules [edit]      查看/编辑自定义规则" ;;
             rules_empty)   echo "📋 未定义自定义规则" ;;
             rules_header)  echo "📋 自定义规则:" ;;
             rules_path)    echo "   文件" ;;
+            stats_title)   echo "📊 Risk Guard 统计" ;;
+            stats_total)   echo "   总评估次数" ;;
+            stats_source)  echo "   按来源" ;;
+            stats_level)   echo "   按风险" ;;
+            stats_empty)   echo "📊 暂无统计数据（日志为空）" ;;
+            stats_blocked) echo "   高风险拦截" ;;
+            stats_hitrate) echo "   缓存命中率" ;;
             cmd_update)    echo "  update            更新到最新版本" ;;
             cmd_uninstall) echo "  uninstall         完全卸载" ;;
             cmd_help)      echo "  help              显示此帮助" ;;
@@ -573,10 +581,18 @@ _t() {
             cmd_test)      echo "  test <cmd>        Test a command's risk level" ;;
             cmd_cache)     echo "  cache [clear]     View/clear cache" ;;
             cmd_log)       echo "  log [N|clear]     View last N log entries / clear log" ;;
+            cmd_stats)     echo "  stats             Show statistics" ;;
             cmd_rules)     echo "  rules [edit]      View/edit custom rules" ;;
             rules_empty)   echo "📋 No custom rules defined" ;;
             rules_header)  echo "📋 Custom rules:" ;;
             rules_path)    echo "   File" ;;
+            stats_title)   echo "📊 Risk Guard Statistics" ;;
+            stats_total)   echo "   Total assessments" ;;
+            stats_source)  echo "   By source" ;;
+            stats_level)   echo "   By risk level" ;;
+            stats_empty)   echo "📊 No statistics yet (log is empty)" ;;
+            stats_blocked) echo "   High-risk blocked" ;;
+            stats_hitrate) echo "   Cache hit rate" ;;
             cmd_update)    echo "  update            Update to latest version" ;;
             cmd_uninstall) echo "  uninstall         Completely uninstall" ;;
             cmd_help)      echo "  help              Show this help" ;;
@@ -736,6 +752,48 @@ uninstall_cmd() {
     rm -f "$self"
 }
 
+stats_cmd() {
+    if [ ! -f "$LOG_FILE" ] || [ ! -s "$LOG_FILE" ]; then
+        _t stats_empty
+        return
+    fi
+
+    _t stats_title
+    echo ""
+
+    local total fast cache rule ai low med high
+    total=$(wc -l < "$LOG_FILE" | tr -d ' ')
+    fast=$(grep -c '\[FAST\]' "$LOG_FILE" 2>/dev/null || echo 0)
+    cache=$(grep -c '\[CACHE\]' "$LOG_FILE" 2>/dev/null || echo 0)
+    rule=$(grep -c '\[RULE\]' "$LOG_FILE" 2>/dev/null || echo 0)
+    ai=$(grep -c '\[AI\]' "$LOG_FILE" 2>/dev/null || echo 0)
+    low=$(grep -c 'LOW ' "$LOG_FILE" 2>/dev/null || echo 0)
+    med=$(grep -c 'MED ' "$LOG_FILE" 2>/dev/null || echo 0)
+    high=$(grep -c 'HIGH' "$LOG_FILE" 2>/dev/null || echo 0)
+
+    echo "$(_t stats_total): $total"
+    echo ""
+    echo "$(_t stats_source):"
+    echo "     FAST  (fast rules)  : $fast"
+    echo "     CACHE (cache hit)   : $cache"
+    echo "     RULE  (custom rules): $rule"
+    echo "     AI    (AI assessed) : $ai"
+    echo ""
+    echo "$(_t stats_level):"
+    echo "     ✅ Low    : $low"
+    echo "     ⚠️  Medium : $med"
+    echo "     🚨 High   : $high"
+    echo ""
+    echo "$(_t stats_blocked): $high"
+
+    # cache hit rate = cache / (cache + ai), only if there were cache or ai calls
+    local cache_plus_ai=$((cache + ai))
+    if [ "$cache_plus_ai" -gt 0 ]; then
+        local rate=$((cache * 100 / cache_plus_ai))
+        echo "$(_t stats_hitrate): ${rate}%  ($cache / $cache_plus_ai)"
+    fi
+}
+
 rules_cmd() {
     local conf="$HOME/.claude/hooks/risk-guard.conf"
     case "${1:-}" in
@@ -797,6 +855,7 @@ usage() {
     _t cmd_test
     _t cmd_cache
     _t cmd_log
+    _t cmd_stats
     _t cmd_rules
     _t cmd_update
     _t cmd_uninstall
@@ -811,6 +870,7 @@ case "${1:-status}" in
     test)           shift; test_command "$@" ;;
     cache)          shift; cache_cmd "$@" ;;
     log|logs)       shift; log_cmd "$@" ;;
+    stats|stat)     stats_cmd ;;
     rules|rule)     shift; rules_cmd "$@" ;;
     update|upgrade) update_cmd ;;
     uninstall)      uninstall_cmd ;;
