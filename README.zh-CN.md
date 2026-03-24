@@ -11,6 +11,10 @@
   <a href="./README.md">English</a> | 中文
 </p>
 
+<p align="center">
+  <video src="https://github.com/shaominngqing/Bark/raw/main/assets/bark-demo.mp4" width="800" controls autoplay muted loop></video>
+</p>
+
 ## 解决什么问题
 
 同时开多个 Claude Code 窗口跑任务时，安全操作也要反复确认，打断工作流、拖慢进度。

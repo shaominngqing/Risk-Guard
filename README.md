@@ -11,6 +11,10 @@
   English | <a href="./README.zh-CN.md">中文</a>
 </p>
 
+<p align="center">
+  <video src="https://github.com/shaominngqing/Bark/raw/main/assets/bark-demo.mp4" width="800" controls autoplay muted loop></video>
+</p>
+
 ## The Problem
 
 When running multiple Claude Code sessions in parallel, even safe operations require repeated manual confirmation, breaking your flow and slowing you down.
