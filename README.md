@@ -36,14 +36,14 @@ Bark intercepts every tool call and makes smart decisions:
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shaominngqing/Risk-Guard/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/shaominngqing/Bark/main/install.sh | bash
 ```
 
 Or clone and install locally:
 
 ```bash
-git clone https://github.com/shaominngqing/Risk-Guard.git
-bash Risk-Guard/install.sh
+git clone https://github.com/shaominngqing/Bark.git
+bash Bark/install.sh
 ```
 
 > Takes effect in new Claude Code sessions automatically.
