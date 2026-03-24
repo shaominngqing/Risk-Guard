@@ -1,0 +1,35 @@
+name: Tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        run: |
+          if ! command -v jq &>/dev/null; then
+            if [[ "$RUNNER_OS" == "Linux" ]]; then
+              sudo apt-get install -y jq
+            else
+              brew install jq
+            fi
+          fi
+
+      - name: Extract hook script from install.sh
+        run: |
+          # Extract the HOOK__EOF heredoc content
+          sed -n "/^cat > \"\$HOOK_SCRIPT\" << 'HOOK__EOF'/,/^HOOK__EOF/p" install.sh \
+            | tail -n +2 | sed '$d' > /tmp/risk-guard.sh
+          chmod +x /tmp/risk-guard.sh
+
+      - name: Run tests
+        run: bash tests/test_core.sh
