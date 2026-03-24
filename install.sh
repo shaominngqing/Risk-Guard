@@ -308,6 +308,49 @@ fast_check() {
 }
 
 # =============================================================================
+# 第 1.5 层: 用户自定义规则
+# =============================================================================
+# 配置文件: ~/.claude/hooks/risk-guard.conf
+# 格式: allow: <pattern>   → level 0 (silent allow)
+#       notify: <pattern>  → level 1 (notify + allow)
+#       block: <pattern>   → level 2 (notify + confirm)
+# 支持 * 通配符，仅匹配 Bash 命令
+# =============================================================================
+CONF_FILE="$HOME/.claude/hooks/risk-guard.conf"
+
+check_custom_rules() {
+    [ "$TOOL_NAME" != "Bash" ] && return 1
+    [ ! -f "$CONF_FILE" ] && return 1
+
+    local line action pattern
+    while IFS= read -r line || [ -n "$line" ]; do
+        # skip comments and empty lines
+        line=$(echo "$line" | sed 's/#.*//' | xargs)
+        [ -z "$line" ] && continue
+
+        # parse "action: pattern"
+        action=$(echo "$line" | cut -d: -f1 | xargs | tr '[:upper:]' '[:lower:]')
+        pattern=$(echo "$line" | cut -d: -f2- | xargs)
+        [ -z "$pattern" ] && continue
+
+        # glob match: convert pattern * to regex .*
+        local regex="^$(echo "$pattern" | sed 's/[.[\^$()+?{|\\]/\\&/g; s/\*/.\*/g')$"
+        if echo "$COMMAND" | grep -qE "$regex"; then
+            local level reason_prefix
+            case "$action" in
+                allow)  level=0; if _is_zh; then reason_prefix="自定义放行"; else reason_prefix="Custom allow"; fi ;;
+                notify) level=1; if _is_zh; then reason_prefix="自定义通知"; else reason_prefix="Custom notify"; fi ;;
+                block)  level=2; if _is_zh; then reason_prefix="自定义拦截"; else reason_prefix="Custom block"; fi ;;
+                *) continue ;;
+            esac
+            echo "${level}|${reason_prefix}: ${pattern}"
+            return 0
+        fi
+    done < "$CONF_FILE"
+    return 1
+}
+
+# =============================================================================
 # 第二层: 缓存查询
 # =============================================================================
 check_cache() {
@@ -377,6 +420,14 @@ FAST_RESULT=$(fast_check) && {
     exit 0
 }
 
+# 第 1.5 层: 用户自定义规则
+CUSTOM_RESULT=$(check_custom_rules) && {
+    LEVEL=$(echo "$CUSTOM_RESULT" | cut -d'|' -f1)
+    REASON=$(echo "$CUSTOM_RESULT" | cut -d'|' -f2-)
+    emit "$LEVEL" "$REASON" "RULE"
+    exit 0
+}
+
 # 第二层: 缓存查询
 CACHE_RESULT=$(check_cache) && {
     LEVEL=$(echo "$CACHE_RESULT" | cut -d'|' -f1)
@@ -395,6 +446,27 @@ chmod +x "$HOOK_SCRIPT"
 
 if is_zh; then step "安装组件"; ok "风险评估引擎  risk-guard.sh"
 else step "Install components"; ok "Risk assessment engine  risk-guard.sh"; fi
+
+# ═══ 写入默认 risk-guard.conf（仅首次安装） ═══
+CONF_FILE="$HOOKS_DIR/risk-guard.conf"
+if [ ! -f "$CONF_FILE" ]; then
+    cat > "$CONF_FILE" << 'CONF__EOF'
+# Risk Guard Custom Rules
+# Format: action: pattern (* wildcard supported)
+#   allow:  <pattern>   → Level 0, silent allow
+#   notify: <pattern>   → Level 1, notify + allow
+#   block:  <pattern>   → Level 2, notify + confirm
+#
+# Examples:
+# allow: npm test
+# allow: npm run *
+# allow: make *
+# notify: git push
+# block: rm -rf /
+CONF__EOF
+    if is_zh; then ok "自定义规则    risk-guard.conf"
+    else ok "Custom rules   risk-guard.conf"; fi
+fi
 
 # ═══ 写入 risk-guard-ctl.sh ═══
 cat > "$CTL_SCRIPT" << 'CTL__EOF'
@@ -457,6 +529,10 @@ _t() {
             cmd_test)      echo "  test <cmd>        测试命令风险等级" ;;
             cmd_cache)     echo "  cache [clear]     查看/清空缓存" ;;
             cmd_log)       echo "  log [N|clear]     查看最近 N 条日志 / 清空日志" ;;
+            cmd_rules)     echo "  rules [edit]      查看/编辑自定义规则" ;;
+            rules_empty)   echo "📋 未定义自定义规则" ;;
+            rules_header)  echo "📋 自定义规则:" ;;
+            rules_path)    echo "   文件" ;;
             cmd_update)    echo "  update            更新到最新版本" ;;
             cmd_uninstall) echo "  uninstall         完全卸载" ;;
             cmd_help)      echo "  help              显示此帮助" ;;
@@ -497,6 +573,10 @@ _t() {
             cmd_test)      echo "  test <cmd>        Test a command's risk level" ;;
             cmd_cache)     echo "  cache [clear]     View/clear cache" ;;
             cmd_log)       echo "  log [N|clear]     View last N log entries / clear log" ;;
+            cmd_rules)     echo "  rules [edit]      View/edit custom rules" ;;
+            rules_empty)   echo "📋 No custom rules defined" ;;
+            rules_header)  echo "📋 Custom rules:" ;;
+            rules_path)    echo "   File" ;;
             cmd_update)    echo "  update            Update to latest version" ;;
             cmd_uninstall) echo "  uninstall         Completely uninstall" ;;
             cmd_help)      echo "  help              Show this help" ;;
@@ -656,6 +736,39 @@ uninstall_cmd() {
     rm -f "$self"
 }
 
+rules_cmd() {
+    local conf="$HOME/.claude/hooks/risk-guard.conf"
+    case "${1:-}" in
+        edit)
+            ${EDITOR:-vi} "$conf"
+            ;;
+        *)
+            if [ ! -f "$conf" ] || [ ! -s "$conf" ]; then
+                _t rules_empty
+                echo "$(_t rules_path): $conf"
+                return
+            fi
+            _t rules_header
+            echo ""
+            # display non-empty non-comment lines
+            local line
+            while IFS= read -r line || [ -n "$line" ]; do
+                line=$(echo "$line" | sed 's/#.*//' | xargs)
+                [ -z "$line" ] && continue
+                local action pattern icon
+                action=$(echo "$line" | cut -d: -f1 | xargs | tr '[:upper:]' '[:lower:]')
+                pattern=$(echo "$line" | cut -d: -f2- | xargs)
+                case "$action" in
+                    allow)  icon="✅" ;; notify) icon="⚠️ " ;; block) icon="🚨" ;; *) icon="?" ;;
+                esac
+                echo "   $icon $action: $pattern"
+            done < "$conf"
+            echo ""
+            echo "$(_t rules_path): $conf"
+            ;;
+    esac
+}
+
 update_cmd() {
     _t updating
     local url="https://raw.githubusercontent.com/shaominngqing/Risk-Guard/main/install.sh"
@@ -684,6 +797,7 @@ usage() {
     _t cmd_test
     _t cmd_cache
     _t cmd_log
+    _t cmd_rules
     _t cmd_update
     _t cmd_uninstall
     _t cmd_help
@@ -697,6 +811,7 @@ case "${1:-status}" in
     test)           shift; test_command "$@" ;;
     cache)          shift; cache_cmd "$@" ;;
     log|logs)       shift; log_cmd "$@" ;;
+    rules|rule)     shift; rules_cmd "$@" ;;
     update|upgrade) update_cmd ;;
     uninstall)      uninstall_cmd ;;
     help|-h|--help) usage ;;

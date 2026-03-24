@@ -50,6 +50,7 @@ risk-guard toggle         # 切换开关
 risk-guard test <cmd>     # 测试命令风险等级
 risk-guard cache [clear]  # 查看 / 清空缓存
 risk-guard log [N|clear]  # 查看 / 清空日志
+risk-guard rules [edit]   # 查看 / 编辑自定义规则
 risk-guard update         # 更新到最新版本
 risk-guard uninstall      # 完全卸载
 ```
@@ -81,6 +82,12 @@ Claude Code 调用工具
            │ 未命中
            ▼
 ┌──────────────────────────┐
+│  第 1.5 层: 自定义规则     │  用户定义的命令模式
+│  risk-guard.conf          │  allow / notify / block
+└──────────┬───────────────┘
+           │ 未命中
+           ▼
+┌──────────────────────────┐
 │  第二层: 缓存查询          │  命令归一化为模式
 │  "rm -rf" → 复用上次      │  md5 哈希, 24小时有效
 │  AI 的判断结果             │
@@ -96,6 +103,19 @@ Claude Code 调用工具
   Level 0 → 静默放行
   Level 1 → 系统通知 + 放行
   Level 2 → 通知 + 声音 + 终端确认
+```
+
+### 自定义规则
+
+创建 `~/.claude/hooks/risk-guard.conf` 定义自己的规则（在 AI 评估之前检查）：
+
+```conf
+# 格式: 动作: 模式（支持 * 通配符）
+allow: npm test
+allow: npm run *
+allow: make *
+notify: git push
+block: rm -rf /
 ```
 
 **设计哲学**：不写硬编码的 Bash 规则。AI 理解命令语义，比正则匹配更准确。缓存保证同类命令第二次零延迟。

@@ -50,6 +50,7 @@ risk-guard toggle         # Toggle on/off
 risk-guard test <cmd>     # Test a command's risk level
 risk-guard cache [clear]  # View / clear cache
 risk-guard log [N|clear]  # View / clear logs
+risk-guard rules [edit]   # View / edit custom rules
 risk-guard update         # Update to latest version
 risk-guard uninstall      # Completely uninstall
 ```
@@ -81,6 +82,12 @@ Claude Code tool call
            │ miss
            ▼
 ┌──────────────────────────────┐
+│  Layer 1.5: Custom Rules     │  User-defined patterns
+│  risk-guard.conf             │  allow / notify / block
+└──────────┬───────────────────┘
+           │ miss
+           ▼
+┌──────────────────────────────┐
 │  Layer 2: Cache Lookup       │  Commands normalized to patterns
 │  "rm -rf" → reuse last      │  md5 hash, 24h TTL
 │  AI judgment                 │
@@ -96,6 +103,19 @@ Claude Code tool call
   Level 0 → Silent allow
   Level 1 → System notification + allow
   Level 2 → Notification + sound + terminal confirmation
+```
+
+### Custom Rules
+
+Create `~/.claude/hooks/risk-guard.conf` to define your own rules (checked before AI assessment):
+
+```conf
+# Format: action: pattern (* wildcard supported)
+allow: npm test
+allow: npm run *
+allow: make *
+notify: git push
+block: rm -rf /
 ```
 
 **Design philosophy**: No hardcoded Bash rules. AI understands command semantics better than regex matching. Cache ensures zero latency for repeated command patterns.
