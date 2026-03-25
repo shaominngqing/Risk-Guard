@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>AI-Powered Risk Assessment for Claude Code</strong><br>
-  <sub>Automatically evaluates every tool call — allow, notify, or block.</sub>
+  <sub>A good dog that barks at danger so you don't have to watch the screen all day.</sub>
 </p>
 
 <p align="center">
@@ -17,11 +17,21 @@
 
 ## The Problem
 
-When running multiple Claude Code sessions in parallel, even safe operations require repeated manual confirmation, breaking your flow and slowing you down.
+You: *runs 5 Claude Code sessions in parallel, goes to make coffee*
+
+Claude: "Can I read this file?" ✋ "Can I edit this file?" ✋ "Can I run `ls`?" ✋
+
+You: *spills coffee, runs back to click "Allow" 47 times*
+
+There has to be a better way.
 
 ## How It Works
 
-Bark intercepts every tool call and makes smart decisions:
+Bark is like a well-trained guard dog for your Claude Code sessions. It sniffs every tool call and decides:
+
+- `ls -la` → *tail wag, no bark* 🐕
+- `git push` → *small woof* 🐕 (notification)
+- `rm -rf /` → *LOUD BARK + BLOCKS THE DOOR* 🐕‍🦺🚨
 
 | Scenario | Action | Latency |
 |---|---|---|
@@ -73,13 +83,13 @@ bark uninstall      # Completely uninstall
 
 ```bash
 bark test ls -la
-# ✅ allow  ([Low] Read-only directory listing)  [0.0s]  — cache hit
+# ✅ allow  ([Low] Read-only directory listing)  [0.0s]  — good boy, no bark
+
+bark test git push
+# ✅ allow  ([Medium] Push to remote, recoverable)  [7.1s]  — small woof
 
 bark test rm -rf /
-# 🚨 ask  ([High] Extremely dangerous recursive root deletion)  [6.8s]
-
-bark test npm install express
-# ✅ allow  ([Medium] Install npm dependency)  [7.2s]
+# 🚨 ask  ([High] Extremely dangerous recursive root deletion)  [6.8s]  — BARK BARK BARK
 ```
 
 ## Architecture
@@ -172,8 +182,23 @@ Bark fills the gap between "approve everything manually" and "skip all safety ch
 
 ```bash
 bark uninstall
+# The dog goes home 🐕💤
 ```
+
+## FAQ
+
+**Q: Will Bark slow down my Claude Code?**
+A: For safe operations — zero latency. For Bash commands, first-time AI assessment takes ~7s, then cached forever (24h). Your dog learns fast.
+
+**Q: What if Bark blocks something I actually want to run?**
+A: High-risk operations aren't denied — they just require your confirmation. Bark asks "Are you sure?", not "No."
+
+**Q: Does Bark work with `--dangerously-skip-permissions`?**
+A: That flag skips ALL hooks including Bark. It's like telling your guard dog to take the day off while leaving the front door open. Not recommended.
+
+**Q: Why not just use Auto Mode?**
+A: Auto Mode is great! But it requires a Team plan, has no caching, no stats, no custom rules, and uses static pattern matching instead of AI. Bark is the free-range organic alternative. 🌿
 
 ## License
 
-MIT
+MIT — Free as in freedom, free as in beer, free as in "the dog doesn't charge for guarding your house." 🐕
