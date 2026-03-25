@@ -95,23 +95,16 @@ export const MacNotification: React.FC<MacNotificationProps> = ({
     >
       <div
         style={{
-          width: 350,
-          // Frosted glass effect — matches macOS notification
-          background: 'rgba(240, 240, 240, 0.75)',
-          backdropFilter: 'blur(50px) saturate(1.8)',
-          WebkitBackdropFilter: 'blur(50px) saturate(1.8)',
-          borderRadius: 14,
-          padding: '12px 14px',
+          width: 380,
+          // macOS notification: solid light background, slight translucency
+          background: '#f2f2f2',
+          borderRadius: 16,
+          padding: '14px 16px',
           display: 'flex',
           alignItems: 'flex-start',
-          gap: 10,
-          // Subtle border like real macOS
-          border: '0.5px solid rgba(0,0,0,0.08)',
-          boxShadow: `
-            0 8px 32px rgba(0,0,0,0.12),
-            0 2px 8px rgba(0,0,0,0.08),
-            0 0 0 0.5px rgba(0,0,0,0.05)
-          `,
+          gap: 12,
+          border: '1px solid rgba(0,0,0,0.06)',
+          boxShadow: '0 8px 30px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.08)',
           fontFamily: FONT_SANS,
         }}
       >
@@ -137,29 +130,26 @@ export const MacNotification: React.FC<MacNotificationProps> = ({
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* App name */}
           <div style={{
-            fontSize: 13,
+            fontSize: 14,
             fontWeight: 600,
             color: '#1a1a1a',
-            marginBottom: 1,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
+            marginBottom: 2,
           }}>
             {appName}
           </div>
           {/* Subtitle — bold */}
           <div style={{
-            fontSize: 13,
+            fontSize: 14,
             fontWeight: 600,
             color: '#333',
             marginBottom: 2,
           }}>
             {subtitle}
           </div>
-          {/* Body — lighter, can be multi-line */}
+          {/* Body */}
           <div style={{
-            fontSize: 12,
-            color: '#5a6a82',
+            fontSize: 13,
+            color: '#555',
             lineHeight: 1.35,
             overflow: 'hidden',
             display: '-webkit-box',
