@@ -1070,7 +1070,7 @@ rules_cmd() {
 update_cmd() {
     local old_ver="$VERSION"
     _t updating
-    local url="https://raw.githubusercontent.com/shaominngqing/Bark/main/install.sh"
+    local url="https://raw.githubusercontent.com/shaominngqing/bark-claude-code-hook/main/install.sh"
     local tmp
     tmp=$(mktemp)
     if ! curl -fsSL "$url" -o "$tmp" 2>/dev/null; then

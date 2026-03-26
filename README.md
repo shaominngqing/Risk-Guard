@@ -50,14 +50,14 @@ Bark is like a well-trained guard dog for your Claude Code sessions. It sniffs e
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shaominngqing/Bark/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/shaominngqing/bark-claude-code-hook/main/install.sh | bash
 ```
 
 Or clone and install locally:
 
 ```bash
-git clone https://github.com/shaominngqing/Bark.git
-bash Bark/install.sh
+git clone https://github.com/shaominngqing/bark-claude-code-hook.git
+bash bark-claude-code-hook/install.sh
 ```
 
 > Takes effect in new Claude Code sessions automatically.

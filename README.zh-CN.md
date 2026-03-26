@@ -50,14 +50,14 @@ Bark 就像一只训练有素的看门狗，嗅探每一个工具调用：
 ## 安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shaominngqing/Bark/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/shaominngqing/bark-claude-code-hook/main/install.sh | bash
 ```
 
 或者克隆后本地安装：
 
 ```bash
-git clone https://github.com/shaominngqing/Bark.git
-bash Bark/install.sh
+git clone https://github.com/shaominngqing/bark-claude-code-hook.git
+bash bark-claude-code-hook/install.sh
 ```
 
 > 新开的 Claude Code 会话自动生效。
