@@ -1,29 +1,41 @@
 import React from 'react';
-import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
 import { MacDesktop } from '../components/MacDesktop';
 import { Transition3D } from '../components/Transition3D';
 import { ClaudeTerminal, ClaudeActivity } from '../components/ClaudeCodeUI';
 import { CharGradientLine } from '../components/GradientText';
 import { Camera, CameraKeyframe } from '../components/Camera';
-import { BARK_ASCII, COLORS, SCENE_DURATIONS } from '../theme';
+import { BARK_ASCII, COLORS, SCENE_DURATIONS, FONT_MONO } from '../theme';
 
-const CHECK_ITEMS = ['jq', 'claude CLI'];
-const INSTALL_ITEMS = ['bark.sh', 'bark-ctl.sh', 'bark.conf'];
-const HOW_IT_WORKS = [
-  { label: 'Read-only', desc: 'Read / Grep / Glob', arrow: 'Allow', color: COLORS.low },
-  { label: 'Bash', desc: 'All commands', arrow: 'AI assess (~7s)', color: COLORS.c2 },
-  { label: 'Danger', desc: 'rm -rf / force push', arrow: 'Notify + confirm', color: COLORS.high },
+const CMD = 'curl -fsSL https://raw.githubusercontent.com/shaominngqing/bark-claude-code-hook/main/install.sh | bash';
+
+// ── Install pipeline rows (matches install.rs completion banner) ──
+const PIPELINE = [
+  { label: 'Read-only', tools: 'Read / Grep / Glob', action: 'Allow', color: COLORS.low },
+  { label: 'Edits', tools: 'Edit / Write', action: 'Allow', color: COLORS.low },
+  { label: 'Bash', tools: 'All commands', action: 'AI assess (~8s)', color: COLORS.c2 },
+  { label: 'Repeat', tools: 'Same pattern', action: 'Cache hit (0s)', color: COLORS.low },
+  { label: 'Danger', tools: 'rm -rf / force push', action: 'Block + confirm', color: COLORS.high },
 ];
 
-const CMD = 'curl -fsSL https://raw.githubusercontent.com/user/Bark/main/install.sh | bash';
-
-// Timeline:
+// Timeline (8s = 240 frames):
 // 0-5:     terminal appears
-// 8-48:    typing command (camera zoomed on this line)
-// 48-54:   typing done, brief "enter" pause
-// 54:      output starts, camera pulls back
-// 54-84:   banner + checks + install + how-it-works (all fast ~1s)
-// 84-150:  hold result (~2.2s)
+// 8-58:    typing curl command (camera zoomed)
+// 58-64:   "enter" pause
+// 64:      output starts, camera pulls back
+// 64-80:   banner lines render fast
+// 82:      subtitle "🐕 AI-Powered... v2.0.2"
+// 86:      "▸ Detect platform"
+// 90:      "✓ macOS aarch64"
+// 94:      "✓ claude CLI"
+// 100:     "▸ Download bark binary"
+// 104-130: progress bar animation
+// 132:     "✓ bark v2.0.2 (3.8MB)"
+// 138:     "▸ Install binary"
+// 142:     "✓ bark → /opt/homebrew/bin/"
+// 148:     completion banner box with pipeline
+// 190:     quick start commands
+// 210-240: hold
 
 export const S02_Install: React.FC = () => {
   const frame = useCurrentFrame();
@@ -37,7 +49,7 @@ export const S02_Install: React.FC = () => {
   for (let i = 0; i < CMD.length; i++) {
     const ch = CMD[i];
     const mult = ch === ' ' ? 0.6 : ch === '/' ? 0.4 : ch === ':' ? 0.5 : 1.0;
-    acc += 1 / (2.5 * mult);
+    acc += 1 / (2.2 * mult);
     if (acc > cmdElapsed) break;
     cmdChars++;
   }
@@ -45,38 +57,70 @@ export const S02_Install: React.FC = () => {
   const typingDone = cmdChars >= CMD.length;
 
   // --- Output timeline ---
-  const outputStart = 54;
+  const outputStart = 64;
   const bannerLines = frame >= outputStart
-    ? Math.min(Math.floor((frame - outputStart) / 1) + 1, BARK_ASCII.length)
+    ? Math.min(Math.floor((frame - outputStart) / 1.5) + 1, BARK_ASCII.length)
     : 0;
-  const subtitleFrame = outputStart + BARK_ASCII.length + 2;
-  const checkFrame = subtitleFrame + 2;
-  const installFrame = checkFrame + 6;
-  const completeFrame = installFrame + 8;
-  const howFrame = completeFrame + 3;
+  const subtitleFrame = outputStart + Math.ceil(BARK_ASCII.length * 1.5) + 3;
+  const detectFrame = subtitleFrame + 4;
+  const platformOk = detectFrame + 4;
+  const claudeOk = platformOk + 4;
+  const downloadFrame = claudeOk + 4;
+  const progressStart = downloadFrame + 4;
+  const progressEnd = progressStart + 26;
+  const downloadOk = progressEnd + 2;
+  const installFrame = downloadOk + 6;
+  const installOk = installFrame + 4;
+  const bannerBoxFrame = installOk + 4;
+  const quickStartFrame = bannerBoxFrame + 38;
 
-  // --- Camera keyframes ---
-  // Typing: zoom in on command line (top area of terminal)
-  // Terminal is centered in viewport. Command line is at top of terminal.
-  // To see top of terminal: move element DOWN (positive y) so viewport shows upper part.
+  // Progress bar animation
+  const progressPct = frame >= progressStart && frame < progressEnd
+    ? Math.min(100, Math.floor(((frame - progressStart) / (progressEnd - progressStart)) * 100))
+    : frame >= progressEnd ? 100 : 0;
+  const progressWidth = 32;
+  const filled = Math.floor(progressPct * progressWidth / 100);
+  const empty = progressWidth - filled;
+  const sizeMB = (progressPct * 3.8 / 100).toFixed(1);
+
+  // --- Camera ---
   const cameraKF: CameraKeyframe[] = [
     { frame: 0, scale: 1.0, x: 0, y: 0 },
-    // Zoom into the command line (top of terminal)
-    { frame: 10, scale: 1.6, x: 0, y: 5 },
-    // Hold zoomed on command line while typing
-    { frame: outputStart - 4, scale: 1.6, x: 0, y: 5 },
-    // After "enter": pull back to normal to see full install output
-    { frame: outputStart + 8, scale: 1.1, x: 0, y: 0 },
-    // Hold for the rest
+    { frame: 10, scale: 1.5, x: 0, y: 5 },
+    { frame: outputStart - 4, scale: 1.5, x: 0, y: 5 },
+    { frame: outputStart + 10, scale: 1.05, x: 0, y: 0 },
   ];
+
+  // Auto-scroll
+  const LINE = 24;
+  let contentH = 10;
+  if (bannerLines > 0) contentH += bannerLines * 18;
+  if (frame >= subtitleFrame) contentH += LINE;
+  if (frame >= detectFrame) contentH += LINE;
+  if (frame >= platformOk) contentH += LINE;
+  if (frame >= claudeOk) contentH += LINE;
+  if (frame >= downloadFrame) contentH += LINE;
+  if (frame >= progressStart) contentH += LINE;
+  if (frame >= downloadOk) contentH += LINE;
+  if (frame >= installFrame) contentH += LINE;
+  if (frame >= installOk) contentH += LINE;
+  if (frame >= bannerBoxFrame) contentH += LINE * 9;
+  if (frame >= quickStartFrame) contentH += LINE * 5;
+  const VISIBLE = 620;
+  const scrollY = Math.min(0, VISIBLE - contentH);
 
   return (
     <Transition3D type="rotateIn">
       <Camera keyframes={cameraKF}>
       <MacDesktop darken={0.4}>
         <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <ClaudeTerminal width={1100} height={660} enterDelay={3}>
-            {/* Prompt: just ~ not ~/project */}
+          <ClaudeTerminal width={1200} height={700} enterDelay={3}>
+            <div style={{
+              transform: `translateY(${scrollY}px)`,
+              transition: 'transform 0.3s ease-out',
+            }}>
+
+            {/* Prompt + curl command */}
             <div style={{ marginBottom: 6 }}>
               <span style={{ color: '#3fb950' }}>❯❯</span>
               <span style={{ color: '#e5c07b' }}> ~ </span>
@@ -89,75 +133,130 @@ export const S02_Install: React.FC = () => {
               )}
             </div>
 
-            {/* Banner */}
+            {/* ── Banner (block pixel art) ── */}
             {bannerLines > 0 && (
-              <div style={{ fontSize: 16, lineHeight: 1.2, margin: '6px 0' }}>
+              <div style={{ fontSize: 12, lineHeight: 1.15, margin: '6px 0' }}>
                 {BARK_ASCII.slice(0, bannerLines).map((line, i) => (
-                  <CharGradientLine key={i} text={line} style={{ fontSize: 16 }} />
+                  <CharGradientLine key={i} text={line}
+                    colors={['#00afff', '#00d7ff', '#00ffff', '#5fffff', '#00d7d7', '#00afff']}
+                    style={{ fontSize: 12 }}
+                  />
                 ))}
               </div>
             )}
             {frame >= subtitleFrame && (
               <div style={{ color: '#888', fontStyle: 'italic', fontSize: 13, marginBottom: 8 }}>
-                🐕 AI-Powered Risk Assessment for Claude Code v1.0.0
+                AI-Powered Risk Assessment for Claude Code v2.0.2
               </div>
             )}
 
-            {/* Check environment */}
-            {frame >= checkFrame && (
-              <ClaudeActivity delay={checkFrame} style={{ marginBottom: 4 }}>
-                <div style={{ color: COLORS.c1, fontWeight: 700 }}>▸ Check environment</div>
+            {/* ── Detect platform ── */}
+            {frame >= detectFrame && (
+              <ClaudeActivity delay={detectFrame} style={{ marginBottom: 2 }}>
+                <span style={{ color: COLORS.c1, fontWeight: 700 }}>  ▸ </span>
+                <span style={{ fontWeight: 700 }}>Detect platform</span>
               </ClaudeActivity>
             )}
-            {CHECK_ITEMS.map((item, i) => {
-              const d = checkFrame + 2 + i * 2;
-              return frame >= d ? (
-                <ClaudeActivity key={item} delay={d} style={{ paddingLeft: 12 }}>
-                  <span style={{ color: COLORS.low }}>✓ </span>{item}
-                </ClaudeActivity>
-              ) : null;
-            })}
+            {frame >= platformOk && (
+              <ClaudeActivity delay={platformOk} style={{ paddingLeft: 20 }}>
+                <span style={{ color: COLORS.low }}>✓ </span>macOS aarch64
+              </ClaudeActivity>
+            )}
+            {frame >= claudeOk && (
+              <ClaudeActivity delay={claudeOk} style={{ paddingLeft: 20 }}>
+                <span style={{ color: COLORS.low }}>✓ </span>claude CLI
+              </ClaudeActivity>
+            )}
 
-            {/* Install */}
+            {/* ── Download binary ── */}
+            {frame >= downloadFrame && (
+              <ClaudeActivity delay={downloadFrame} style={{ marginTop: 6, marginBottom: 2 }}>
+                <span style={{ color: COLORS.c1, fontWeight: 700 }}>  ▸ </span>
+                <span style={{ fontWeight: 700 }}>Download bark binary</span>
+              </ClaudeActivity>
+            )}
+            {/* Progress bar */}
+            {frame >= progressStart && frame < downloadOk && (
+              <div style={{ paddingLeft: 20, fontSize: 13, fontFamily: FONT_MONO }}>
+                <span>  </span>
+                {Array.from({ length: progressWidth }).map((_, i) => (
+                  <span key={i} style={{ color: i < filled ? COLORS.c1 : '#444' }}>━</span>
+                ))}
+                <span style={{ color: '#888', marginLeft: 8 }}>{sizeMB}/3.8MB</span>
+                <span style={{ color: '#888', marginLeft: 8 }}>{progressPct}%</span>
+              </div>
+            )}
+            {frame >= downloadOk && (
+              <ClaudeActivity delay={downloadOk} style={{ paddingLeft: 20 }}>
+                <span style={{ color: COLORS.low }}>✓ </span>bark v2.0.2 (3.8MB)
+              </ClaudeActivity>
+            )}
+
+            {/* ── Install binary ── */}
             {frame >= installFrame && (
-              <ClaudeActivity delay={installFrame} style={{ marginTop: 4, marginBottom: 3 }}>
-                <div style={{ color: COLORS.c1, fontWeight: 700 }}>▸ Install components</div>
+              <ClaudeActivity delay={installFrame} style={{ marginTop: 6, marginBottom: 2 }}>
+                <span style={{ color: COLORS.c1, fontWeight: 700 }}>  ▸ </span>
+                <span style={{ fontWeight: 700 }}>Install binary</span>
               </ClaudeActivity>
             )}
-            {INSTALL_ITEMS.map((item, i) => {
-              const d = installFrame + 2 + i * 2;
-              return frame >= d ? (
-                <ClaudeActivity key={item} delay={d} style={{ paddingLeft: 12 }}>
-                  <span style={{ color: COLORS.low }}>✓ </span>{item}
-                </ClaudeActivity>
-              ) : null;
-            })}
+            {frame >= installOk && (
+              <ClaudeActivity delay={installOk} style={{ paddingLeft: 20 }}>
+                <span style={{ color: COLORS.low }}>✓ </span>bark → /opt/homebrew/bin/
+              </ClaudeActivity>
+            )}
 
-            {/* Complete + How it works */}
-            {frame >= completeFrame && (
-              <ClaudeActivity delay={completeFrame} style={{ marginTop: 6 }}>
-                <span style={{ color: COLORS.low }}>✓ Installation complete!</span>
+            {/* ── Completion banner box ── */}
+            {frame >= bannerBoxFrame && (
+              <ClaudeActivity delay={bannerBoxFrame} style={{ marginTop: 10 }}>
+                <div style={{ color: '#555', fontSize: 13 }}>  ╭{'─'.repeat(48)}╮</div>
+                <div style={{ color: '#555', fontSize: 13, display: 'flex' }}>
+                  <span>  │ </span>
+                  <CharGradientLine text=" Installation Complete!"
+                    colors={['#00afff', '#00d7ff', '#00ffff', '#5fffff']}
+                    style={{ fontWeight: 700, fontSize: 14 }}
+                  />
+                  <span style={{ flex: 1 }} />
+                  <span style={{ color: '#555' }}>{'              '}│</span>
+                </div>
+                <div style={{ color: '#555', fontSize: 13 }}>  ├{'─'.repeat(48)}┤</div>
+                {PIPELINE.map((row, i) => {
+                  const d = bannerBoxFrame + 4 + i * 3;
+                  return frame >= d ? (
+                    <ClaudeActivity key={i} delay={d}>
+                      <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ color: '#555' }}>  │</span>
+                        <span style={{ color: row.color }}>◆</span>
+                        <span style={{ color: '#888', width: 65, display: 'inline-block' }}>{row.label}</span>
+                        <span style={{ color: '#888' }}>{row.tools}</span>
+                        <span style={{ color: '#555', margin: '0 4px' }}>──▸</span>
+                        <span style={{ color: row.color, fontWeight: 600 }}>{row.action}</span>
+                      </div>
+                    </ClaudeActivity>
+                  ) : null;
+                })}
+                {frame >= bannerBoxFrame + 20 && (
+                  <div style={{ color: '#555', fontSize: 13 }}>  ╰{'─'.repeat(48)}╯</div>
+                )}
               </ClaudeActivity>
             )}
-            {frame >= howFrame && (
-              <ClaudeActivity delay={howFrame} style={{ fontWeight: 700, marginTop: 4 }}>
-                How it works
+
+            {/* ── Quick start ── */}
+            {frame >= quickStartFrame && (
+              <ClaudeActivity delay={quickStartFrame} style={{ marginTop: 8 }}>
+                <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 13 }}>  Quick Start</div>
+                <div style={{ fontSize: 13, paddingLeft: 16, color: '#888' }}>
+                  <span style={{ color: COLORS.c2 }}>bark</span> help{'           '}Show all commands
+                </div>
+                <div style={{ fontSize: 13, paddingLeft: 16, color: '#888' }}>
+                  <span style={{ color: COLORS.c2 }}>bark</span> stats{'          '}Statistics dashboard
+                </div>
+                <div style={{ fontSize: 13, paddingLeft: 16, color: '#888' }}>
+                  <span style={{ color: COLORS.c2 }}>bark</span> test rm -rf /{'  '}Test any command
+                </div>
               </ClaudeActivity>
             )}
-            {HOW_IT_WORKS.map((item, i) => {
-              const d = howFrame + 3 + i * 3;
-              return frame >= d ? (
-                <ClaudeActivity key={i} delay={d} style={{
-                  paddingLeft: 12, display: 'flex', gap: 8, alignItems: 'center', fontSize: 13,
-                }}>
-                  <span style={{ color: item.color }}>◆</span>
-                  <span style={{ color: '#888', width: 70 }}>{item.label}</span>
-                  <span style={{ color: '#888' }}>{item.desc}</span>
-                  <span style={{ color: '#555' }}>──▸</span>
-                  <span style={{ color: item.color, fontWeight: 600 }}>{item.arrow}</span>
-                </ClaudeActivity>
-              ) : null;
-            })}
+
+            </div>{/* end scroll wrapper */}
           </ClaudeTerminal>
         </AbsoluteFill>
       </MacDesktop>

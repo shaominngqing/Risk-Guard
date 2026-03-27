@@ -9,10 +9,10 @@ import { SceneLabel } from '../components/SceneLabel';
 import { BARK_ASCII_SMALL, COLORS, SCENE_DURATIONS } from '../theme';
 
 const CMDS = [
-  { cmd: 'bark off', delay: 3, resultDelay: 10, output: '● Bark disabled (takes effect in new sessions)', color: '#888' },
-  { cmd: 'bark on', delay: 22, resultDelay: 29, output: '● Bark enabled (takes effect in new sessions)', color: COLORS.low },
+  { cmd: 'bark off', delay: 3, resultDelay: 10, output: '⚠ Bark disabled', color: '#888' },
+  { cmd: 'bark on', delay: 22, resultDelay: 29, output: '✓ Bark enabled', color: COLORS.low },
   { cmd: 'bark version', delay: 42, resultDelay: 50, output: null, color: '' },
-  { cmd: 'bark update', delay: 68, resultDelay: 76, output: 'Updating... ● Already up to date v1.0.0', color: COLORS.low },
+  { cmd: 'bark update', delay: 68, resultDelay: 76, output: '✓ Already up to date v2.0.2', color: COLORS.low },
 ];
 
 export const S15_OnOff: React.FC = () => {
@@ -22,7 +22,7 @@ export const S15_OnOff: React.FC = () => {
     <Transition3D type="pushIn">
       <Camera keyframes={cameraTypeAndReveal(SCENE_DURATIONS.onOff)}>
       <MacDesktop darken={0.4}>
-        <SceneLabel text="🔧 Toggle & Update" sub="开关控制 · bark on/off" color={COLORS.gradientStart} delay={8} />
+        <SceneLabel text="Toggle & Update" sub="开关控制 · bark on/off" color={COLORS.gradientStart} delay={8} />
         <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <ClaudeTerminal width={1000} height={500} enterDelay={3} title="bark">
             {CMDS.map((item, i) => {
@@ -40,7 +40,7 @@ export const S15_OnOff: React.FC = () => {
                       {BARK_ASCII_SMALL.map((line, j) => (
                         <CharGradientLine key={j} text={line} style={{ fontSize: 13, lineHeight: 1.2 }} />
                       ))}
-                      <div style={{ color: '#888', fontSize: 12, marginTop: 3 }}>v1.0.0</div>
+                      <div style={{ color: '#888', fontSize: 12, marginTop: 3 }}>v2.0.2</div>
                     </ClaudeActivity>
                   )}
                 </div>

@@ -9,18 +9,19 @@ import { SceneLabel } from '../components/SceneLabel';
 import { BARK_ASCII_SMALL, COLORS, SCENE_DURATIONS } from '../theme';
 
 const HELP = [
-  { cmd: 'status', desc: 'Show status' },
-  { cmd: 'on / off', desc: 'Enable / disable' },
+  { cmd: 'status', desc: 'Show daemon & hook status' },
+  { cmd: 'on / off', desc: 'Enable / disable hook' },
   { cmd: 'toggle', desc: 'Toggle on/off' },
   { cmd: 'test <cmd>', desc: "Test a command's risk level" },
-  { cmd: 'test -v <cmd>', desc: 'Verbose debug output' },
-  { cmd: 'test -n <cmd>', desc: 'Dry-run mode' },
-  { cmd: 'cache [clear]', desc: 'View / clear cache' },
-  { cmd: 'log [N|clear]', desc: 'View / clear logs' },
+  { cmd: 'test -v <cmd>', desc: 'Verbose: show all 7 layers' },
+  { cmd: 'cache [clear]', desc: 'View / clear SQLite cache' },
+  { cmd: 'log [N|clear]', desc: 'View / clear assessment log' },
   { cmd: 'stats', desc: 'Statistics dashboard' },
-  { cmd: 'rules [edit]', desc: 'Custom rules' },
-  { cmd: 'update', desc: 'Update to latest' },
-  { cmd: 'uninstall', desc: 'Completely uninstall' },
+  { cmd: 'rules [edit]', desc: 'Custom TOML rules' },
+  { cmd: 'tui', desc: 'Terminal dashboard (live feed)' },
+  { cmd: 'install', desc: 'Register hook in settings.json' },
+  { cmd: 'update', desc: 'Update to latest version' },
+  { cmd: 'uninstall', desc: 'Completely remove' },
 ];
 
 export const S17_Help: React.FC = () => {
@@ -30,9 +31,9 @@ export const S17_Help: React.FC = () => {
     <Transition3D type="rotateIn">
       <Camera keyframes={cameraSteadyZoom(SCENE_DURATIONS.help)}>
       <MacDesktop darken={0.4}>
-        <SceneLabel text="📖 Command List" sub="完整命令 · bark help" color={COLORS.gradientStart} delay={8} />
+        <SceneLabel text="Command List" sub="完整命令 · bark help" color={COLORS.gradientStart} delay={8} />
         <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <ClaudeTerminal width={1100} height={620} enterDelay={3} title="bark help">
+          <ClaudeTerminal width={1100} height={650} enterDelay={3} title="bark help">
             <ShellPrompt command="bark help" delay={3} typingSpeed={4.0} />
             {frame >= 8 && (
               <ClaudeActivity delay={8} style={{ margin: '6px 0' }}>
@@ -40,7 +41,7 @@ export const S17_Help: React.FC = () => {
                   <CharGradientLine key={i} text={line} style={{ fontSize: 15, lineHeight: 1.2 }} />
                 ))}
                 <div style={{ color: '#888', fontSize: 12, marginTop: 4, fontStyle: 'italic' }}>
-                  🐕 AI-Powered Risk Assessment for Claude Code
+                  AI-Powered Risk Assessment for Claude Code
                 </div>
               </ClaudeActivity>
             )}
@@ -50,9 +51,9 @@ export const S17_Help: React.FC = () => {
               </ClaudeActivity>
             )}
             {HELP.map((item, i) => {
-              const d = 20 + i * 3;
+              const d = 20 + i * 2.5;
               return frame >= d ? (
-                <ClaudeActivity key={i} delay={d} style={{
+                <ClaudeActivity key={i} delay={Math.floor(d)} style={{
                   display: 'flex', gap: 16, padding: '1px 0', fontSize: 13,
                 }}>
                   <span style={{ color: COLORS.gradientMid, width: 160, fontWeight: 600 }}>{item.cmd}</span>

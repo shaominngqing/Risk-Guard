@@ -10,17 +10,19 @@ import { ProgressBar } from '../components/ProgressBar';
 import { AnimatedNumber } from '../components/AnimatedNumber';
 import { COLORS, SCENE_DURATIONS } from '../theme';
 
-const TOTAL = 142;
+const TOTAL = 247;
 const SOURCES = [
-  { label: 'FAST', value: 89, color: COLORS.low, suffix: 'fast rules' },
-  { label: 'CACHE', value: 31, color: COLORS.c2, suffix: 'cache hit' },
-  { label: 'RULE', value: 5, color: COLORS.purple, suffix: 'custom rules' },
-  { label: 'AI', value: 17, color: COLORS.orange, suffix: 'AI assessed' },
+  { label: 'FAST', value: 138, color: COLORS.low, suffix: 'fast rules' },
+  { label: 'CACHE', value: 62, color: COLORS.c2, suffix: 'cache hit' },
+  { label: 'AST', value: 18, color: COLORS.low, suffix: 'tree-sitter' },
+  { label: 'RULE', value: 7, color: COLORS.purple, suffix: 'custom rules' },
+  { label: 'AI', value: 19, color: COLORS.orange, suffix: 'AI assessed' },
+  { label: 'CHAIN', value: 3, color: COLORS.medium, suffix: 'chain detect' },
 ];
 const RISKS = [
-  { label: 'Low', value: 120, color: COLORS.low },
-  { label: 'Medium', value: 18, color: COLORS.medium },
-  { label: 'High', value: 4, color: COLORS.high },
+  { label: 'Low', value: 198, color: COLORS.low },
+  { label: 'Medium', value: 38, color: COLORS.medium },
+  { label: 'High', value: 11, color: COLORS.high },
 ];
 
 export const S12_Stats: React.FC = () => {
@@ -30,7 +32,7 @@ export const S12_Stats: React.FC = () => {
     <Transition3D type="pivotLeft">
       <Camera keyframes={cameraSteadyZoom(SCENE_DURATIONS.stats)}>
       <MacDesktop darken={0.4}>
-        <SceneLabel text="📊 Statistics Dashboard" sub="统计仪表板 · bark stats" color={COLORS.c2} delay={8} />
+        <SceneLabel text="Statistics Dashboard" sub="统计仪表板 · bark stats" color={COLORS.c2} delay={8} />
         <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <ClaudeTerminal width={1200} height={700} enterDelay={3} title="bark stats">
             <ShellPrompt command="bark stats" delay={5} typingSpeed={4.0} />
@@ -59,37 +61,43 @@ export const S12_Stats: React.FC = () => {
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>Assessment Source</div>
                 {SOURCES.map((s, i) => (
                   <ProgressBar key={i} label={s.label} value={s.value} max={TOTAL}
-                    color={s.color} suffix={s.suffix} startFrame={24 + i * 5}
+                    color={s.color} suffix={s.suffix} startFrame={24 + i * 4}
                     style={{ marginBottom: 3 }} />
                 ))}
               </ClaudeActivity>
             )}
 
-            {frame >= 50 && (
-              <ClaudeActivity delay={50} style={{ marginBottom: 8 }}>
+            {frame >= 54 && (
+              <ClaudeActivity delay={54} style={{ marginBottom: 8 }}>
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>Risk Distribution</div>
                 {RISKS.map((r, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, fontSize: 14 }}>
                     <span style={{ color: r.color, width: 65 }}>◉ {r.label}</span>
                     <ProgressBar label="" value={r.value} max={TOTAL} color={r.color}
-                      startFrame={50 + i * 5} />
+                      startFrame={54 + i * 5} />
                   </div>
                 ))}
               </ClaudeActivity>
             )}
 
-            {frame >= 72 && (
-              <ClaudeActivity delay={72} style={{ display: 'flex', gap: 12, fontSize: 13 }}>
+            {frame >= 76 && (
+              <ClaudeActivity delay={76} style={{ display: 'flex', gap: 12, fontSize: 13 }}>
                 <div>
                   <div style={{ color: '#555' }}>┌{'─'.repeat(22)}┐</div>
                   <div style={{ color: '#555' }}>│ <span style={{ fontStyle: 'italic', color: '#ccc' }}>Cache Hit Rate</span>{'       '}│</div>
-                  <div style={{ color: '#555' }}>│  <span style={{ color: COLORS.c1, fontWeight: 700, fontSize: 17 }}>64%</span>{'                 '}│</div>
+                  <div style={{ color: '#555' }}>│  <span style={{ color: COLORS.c1, fontWeight: 700, fontSize: 17 }}>81%</span>{'                 '}│</div>
                   <div style={{ color: '#555' }}>└{'─'.repeat(22)}┘</div>
                 </div>
                 <div>
                   <div style={{ color: '#555' }}>┌{'─'.repeat(22)}┐</div>
                   <div style={{ color: '#555' }}>│ <span style={{ fontStyle: 'italic', color: '#ccc' }}>High Risk Blocked</span>{'    '}│</div>
-                  <div style={{ color: '#555' }}>│  <span style={{ color: COLORS.high, fontWeight: 700, fontSize: 17 }}>4</span>{'                   '}│</div>
+                  <div style={{ color: '#555' }}>│  <span style={{ color: COLORS.high, fontWeight: 700, fontSize: 17 }}>11</span>{'                  '}│</div>
+                  <div style={{ color: '#555' }}>└{'─'.repeat(22)}┘</div>
+                </div>
+                <div>
+                  <div style={{ color: '#555' }}>┌{'─'.repeat(22)}┐</div>
+                  <div style={{ color: '#555' }}>│ <span style={{ fontStyle: 'italic', color: '#ccc' }}>AST Detections</span>{'      '}│</div>
+                  <div style={{ color: '#555' }}>│  <span style={{ color: COLORS.orange, fontWeight: 700, fontSize: 17 }}>18</span>{'                  '}│</div>
                   <div style={{ color: '#555' }}>└{'─'.repeat(22)}┘</div>
                 </div>
               </ClaudeActivity>

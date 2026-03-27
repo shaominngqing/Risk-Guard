@@ -66,8 +66,9 @@ export const HEIGHT = 1080;
 // Scene durations in seconds
 export const SCENE_DURATIONS = {
   opening: 3,
-  install: 5,
-  workflow: 30,      // read-only → edit → AI assess → cache hit → high risk
+  features: 6,       // 6 features × 1s each, one at a time full-screen
+  install: 8,        // platform detect → download binary → bark install → completion banner
+  workflow: 35,      // read-only → edit → AST detection → AI assess + cache → high risk + chain
   stats: 5,
   cacheManage: 3,
   logView: 3,
@@ -77,13 +78,16 @@ export const SCENE_DURATIONS = {
 
 export const TOTAL_DURATION = Object.values(SCENE_DURATIONS).reduce((a, b) => a + b, 0);
 
-// Figlet slant ASCII art for Bark
+// Block pixel art ASCII — matches install.sh banner
 export const BARK_ASCII = [
-  '    ____             __',
-  '   / __ )____ ______/ /__',
-  '  / __  / __ `/ ___/ //_/',
-  ' / /_/ / /_/ / /  / ,<',
-  '/_____/\\__,_/_/  /_/|_|',
+  ' ███████████                      █████',
+  '░░███░░░░░███                    ░░███',
+  ' ░███    ░███  ██████   ████████  ░███ █████',
+  ' ░██████████  ░░░░░███ ░░███░░███ ░███░░███',
+  ' ░███░░░░░███  ███████  ░███ ░░░  ░██████░',
+  ' ░███    ░███ ███░░███  ░███      ░███░░███',
+  ' ███████████ ░░████████ █████     ████ █████',
+  '░░░░░░░░░░░   ░░░░░░░░ ░░░░░     ░░░░ ░░░░░',
 ];
 
 // Small version ASCII art

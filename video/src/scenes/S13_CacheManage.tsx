@@ -21,7 +21,7 @@ export const S13_CacheManage: React.FC = () => {
     <Transition3D type="fadeScale">
       <Camera keyframes={cameraZoomToContent(SCENE_DURATIONS.cacheManage)}>
       <MacDesktop darken={0.4}>
-        <SceneLabel text="📦 Cache Management" sub="缓存管理 · bark cache" color={COLORS.c2} delay={8} />
+        <SceneLabel text="Cache Management" sub="SQLite缓存管理 · bark cache" color={COLORS.c2} delay={8} />
         <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <ClaudeTerminal width={1000} height={420} enterDelay={3} title="bark cache">
             <ShellPrompt command="bark cache" delay={3} typingSpeed={4.0} />

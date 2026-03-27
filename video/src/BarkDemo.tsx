@@ -3,6 +3,7 @@ import { AbsoluteFill, Sequence } from 'remotion';
 import { FPS, SCENE_DURATIONS, COLORS } from './theme';
 
 import { S01_Opening } from './scenes/S01_Opening';
+import { S02_Features } from './scenes/S02_Features';
 import { S02_Install } from './scenes/S02_Install';
 import { S03_Workflow } from './scenes/S03_Workflow';
 import { S12_Stats } from './scenes/S12_Stats';
@@ -13,6 +14,7 @@ import { S17_Help } from './scenes/S17_Help';
 
 const scenes = [
   { Component: S01_Opening, duration: SCENE_DURATIONS.opening },
+  { Component: S02_Features, duration: SCENE_DURATIONS.features },
   { Component: S02_Install, duration: SCENE_DURATIONS.install },
   { Component: S03_Workflow, duration: SCENE_DURATIONS.workflow },
   { Component: S12_Stats, duration: SCENE_DURATIONS.stats },

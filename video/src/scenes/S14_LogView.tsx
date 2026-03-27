@@ -11,9 +11,10 @@ import { COLORS, SCENE_DURATIONS } from '../theme';
 const LOGS = [
   { level: 'LOW', color: COLORS.low, time: '14:23', source: 'FAST', tool: 'Read', cmd: 'src/main.ts' },
   { level: 'LOW', color: COLORS.low, time: '14:23', source: 'FAST', tool: 'Grep', cmd: '"fn" src/' },
+  { level: 'HIGH', color: COLORS.high, time: '14:24', source: 'AST', tool: 'Bash', cmd: 'curl ... | bash' },
   { level: 'MED', color: COLORS.medium, time: '14:24', source: 'AI', tool: 'Bash', cmd: 'git push' },
   { level: 'LOW', color: COLORS.low, time: '14:25', source: 'CACHE', tool: 'Bash', cmd: 'git commit' },
-  { level: 'HIGH', color: COLORS.high, time: '14:26', source: 'AI', tool: 'Bash', cmd: 'git reset --hard' },
+  { level: 'HIGH', color: COLORS.high, time: '14:26', source: 'CHAIN', tool: 'Bash', cmd: 'git reset --hard' },
   { level: 'LOW', color: COLORS.low, time: '14:27', source: 'FAST', tool: 'Glob', cmd: '**/*.ts' },
 ];
 
@@ -24,9 +25,9 @@ export const S14_LogView: React.FC = () => {
     <Transition3D type="rotateIn">
       <Camera keyframes={cameraZoomToContent(SCENE_DURATIONS.logView)}>
       <MacDesktop darken={0.4}>
-        <SceneLabel text="📋 Log Viewer" sub="日志查看 · bark log" color={COLORS.gradientMid} delay={8} />
+        <SceneLabel text="Log Viewer" sub="日志查看 · bark log" color={COLORS.gradientMid} delay={8} />
         <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <ClaudeTerminal width={1100} height={460} enterDelay={3} title="bark log">
+          <ClaudeTerminal width={1100} height={500} enterDelay={3} title="bark log">
             <ShellPrompt command="bark log" delay={3} typingSpeed={4.0} />
             {frame >= 10 && (
               <ClaudeActivity delay={10} style={{ marginBottom: 6 }}>
@@ -34,7 +35,7 @@ export const S14_LogView: React.FC = () => {
               </ClaudeActivity>
             )}
             {LOGS.map((e, i) => {
-              const d = 14 + i * 4;
+              const d = 14 + i * 3;
               return frame >= d ? (
                 <ClaudeActivity key={i} delay={d} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
@@ -49,13 +50,13 @@ export const S14_LogView: React.FC = () => {
                 </ClaudeActivity>
               ) : null;
             })}
-            {frame >= 44 && (
+            {frame >= 40 && (
               <div style={{ marginTop: 10 }}>
-                <ShellPrompt command="bark log clear" delay={44} typingSpeed={4.0} />
+                <ShellPrompt command="bark log clear" delay={40} typingSpeed={4.0} />
               </div>
             )}
-            {frame >= 52 && (
-              <ClaudeActivity delay={52}>
+            {frame >= 50 && (
+              <ClaudeActivity delay={50}>
                 <span style={{ color: COLORS.low }}>✅ Log cleared</span>
               </ClaudeActivity>
             )}
