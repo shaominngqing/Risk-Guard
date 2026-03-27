@@ -154,6 +154,20 @@ Claude Code does something
   🟢 allow  /  🟡 allow + notify  /  🔴 ask user
 ```
 
+### Cross-Platform (This Dog Travels)
+
+One binary. Every platform. No dependencies.
+
+| Platform | Install | Notifications | Daemon |
+|---|---|---|---|
+| **macOS** (Apple Silicon) | `curl \| bash` or `brew` | `osascript` (native) | Unix socket |
+| **macOS** (Intel) | `curl \| bash` | `osascript` (native) | Unix socket |
+| **Linux** (x86_64) | `curl \| bash` | `notify-send` | Unix socket |
+| **Linux** (ARM64) | `curl \| bash` | `notify-send` | Unix socket |
+| **Windows** (x86_64) | `curl \| bash` | PowerShell toast | standalone only |
+
+Pre-built binaries for all 5 platforms on every [release](https://github.com/shaominngqing/bark-claude-code-hook/releases). The install script auto-detects your system. No Rust toolchain needed.
+
 ### Daemon Mode (Turbo Dog)
 
 ```bash

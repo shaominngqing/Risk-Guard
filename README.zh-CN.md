@@ -175,6 +175,20 @@ Claude Code 要做什么事
   🟢 放行  /  🟡 放行 + 通知  /  🔴 问你
 ```
 
+### 全平台支持（这只狗到处跑）
+
+一个二进制。所有平台。零依赖。
+
+| 平台 | 安装方式 | 通知 | Daemon |
+|---|---|---|---|
+| **macOS** (Apple Silicon) | `curl \| bash` | `osascript`（原生） | Unix socket |
+| **macOS** (Intel) | `curl \| bash` | `osascript`（原生） | Unix socket |
+| **Linux** (x86_64) | `curl \| bash` | `notify-send` | Unix socket |
+| **Linux** (ARM64) | `curl \| bash` | `notify-send` | Unix socket |
+| **Windows** (x86_64) | `curl \| bash` | PowerShell toast | 仅 standalone |
+
+每个 [Release](https://github.com/shaominngqing/bark-claude-code-hook/releases) 都有 5 个平台的预编译二进制。安装脚本自动检测系统。不需要装 Rust。
+
 ### Daemon 模式（涡轮狗）
 
 ```bash
