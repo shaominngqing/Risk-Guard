@@ -7,11 +7,17 @@ const READ_ONLY_TOOLS: &[&str] = &[
     "Glob",
     "Grep",
     "Agent",
+    "SendMessage",
     "AskUserQuestion",
     "EnterPlanMode",
     "ExitPlanMode",
+    "EnterWorktree",
+    "ExitWorktree",
     "WebFetch",
+    "WebSearch",
     "Skill",
+    "ToolSearch",
+    "TodoRead",
 ];
 
 /// Task management tools (safe, user-initiated).
@@ -22,6 +28,12 @@ const TASK_TOOLS: &[&str] = &[
     "TaskOutput",
     "TaskUpdate",
     "TaskStop",
+    "TodoWrite",
+    "TeamCreate",
+    "TeamDelete",
+    "CronCreate",
+    "CronDelete",
+    "CronList",
 ];
 
 /// File-modifying tools that need file path inspection.
