@@ -1,10 +1,10 @@
-
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
+use parking_lot::Mutex;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
 use tokio::signal;
@@ -15,19 +15,29 @@ use crate::core::engine::AssessmentEngine;
 use crate::core::protocol::HookOutput;
 use crate::daemon::protocol::{DaemonRequest, DaemonResponse};
 
+/// How long the daemon waits without any request before auto-exiting.
+const IDLE_TIMEOUT: Duration = Duration::from_secs(30 * 60); // 30 minutes
+
 /// Shared state for the daemon, accessible from connection handlers.
 struct DaemonState {
     engine: AssessmentEngine,
     start_time: Instant,
+    last_activity: Mutex<Instant>,
     assessment_count: AtomicU64,
     shutdown: AtomicBool,
 }
 
+impl DaemonState {
+    fn touch(&self) {
+        *self.last_activity.lock() = Instant::now();
+    }
+
+    fn idle_duration(&self) -> Duration {
+        self.last_activity.lock().elapsed()
+    }
+}
+
 /// The Bark daemon server.
-///
-/// Listens on a Unix domain socket for assessment requests from clients.
-/// Keeps the `AssessmentEngine` alive in memory with warm caches,
-/// eliminating per-invocation startup cost.
 pub struct DaemonServer {
     state: Arc<DaemonState>,
     socket_path: PathBuf,
@@ -35,17 +45,13 @@ pub struct DaemonServer {
 }
 
 impl DaemonServer {
-    /// Create a new daemon server.
-    ///
-    /// # Arguments
-    /// * `engine` - The assessment engine to use for processing requests.
-    /// * `socket_path` - Path to the Unix domain socket to bind.
-    /// * `pid_path` - Path to the PID file to write.
     pub fn new(engine: AssessmentEngine, socket_path: PathBuf, pid_path: PathBuf) -> Self {
+        let now = Instant::now();
         Self {
             state: Arc::new(DaemonState {
                 engine,
-                start_time: Instant::now(),
+                start_time: now,
+                last_activity: Mutex::new(now),
                 assessment_count: AtomicU64::new(0),
                 shutdown: AtomicBool::new(false),
             }),
@@ -54,10 +60,9 @@ impl DaemonServer {
         }
     }
 
-    /// Run the daemon server.
+    /// Run the daemon server with idle timeout.
     ///
-    /// Binds a Unix domain socket, writes a PID file, and enters the
-    /// accept loop. Handles `SIGTERM` and `SIGINT` for graceful shutdown.
+    /// Auto-exits after 30 minutes of no requests.
     pub async fn run(&self) -> Result<()> {
         // Remove stale socket file if it exists
         if self.socket_path.exists() {
@@ -76,15 +81,29 @@ impl DaemonServer {
         tracing::info!(
             socket = %self.socket_path.display(),
             pid = pid,
-            "Bark daemon started"
+            "Bark daemon started (idle timeout: 30m)"
         );
 
-        // Accept loop with graceful shutdown on SIGTERM/SIGINT
+        // Accept loop with idle timeout and graceful shutdown
         loop {
+            // Check idle timeout
+            if self.state.idle_duration() > IDLE_TIMEOUT {
+                tracing::info!("Idle timeout reached, shutting down");
+                break;
+            }
+
+            // Check shutdown flag
+            if self.state.shutdown.load(Ordering::Relaxed) {
+                tracing::info!("Shutdown requested");
+                break;
+            }
+
             tokio::select! {
+                // Accept new connection
                 accept_result = listener.accept() => {
                     match accept_result {
                         Ok((stream, _addr)) => {
+                            self.state.touch();
                             let state = Arc::clone(&self.state);
                             tokio::spawn(async move {
                                 if let Err(e) = handle_connection(stream, state).await {
@@ -97,27 +116,23 @@ impl DaemonServer {
                         }
                     }
                 }
+                // Ctrl+C
                 _ = signal::ctrl_c() => {
                     tracing::info!("Received shutdown signal");
                     break;
                 }
-            }
-
-            // Check if a Shutdown request was received
-            if self.state.shutdown.load(Ordering::Relaxed) {
-                tracing::info!("Shutdown requested via protocol");
-                break;
+                // Periodic idle check (every 60s)
+                _ = tokio::time::sleep(Duration::from_secs(60)) => {
+                    // Loop will check idle_duration at top
+                }
             }
         }
 
-        // Cleanup: remove socket and PID file
         self.cleanup();
-
         tracing::info!("Bark daemon stopped");
         Ok(())
     }
 
-    /// Remove the socket and PID files.
     fn cleanup(&self) {
         std::fs::remove_file(&self.socket_path).ok();
         std::fs::remove_file(&self.pid_path).ok();
@@ -125,9 +140,6 @@ impl DaemonServer {
 }
 
 /// Handle a single client connection.
-///
-/// Protocol: read one line of JSON, parse as `DaemonRequest`, process,
-/// write `DaemonResponse` as JSON + newline, then close the connection.
 async fn handle_connection(
     stream: tokio::net::UnixStream,
     state: Arc<DaemonState>,
@@ -161,30 +173,29 @@ async fn handle_connection(
         .context("failed to write response")?;
 
     writer.flush().await.ok();
-
     Ok(())
 }
 
-/// Process a single daemon request and produce a response.
+/// Process a single daemon request.
 async fn process_request(
     request: DaemonRequest,
     state: &Arc<DaemonState>,
 ) -> DaemonResponse {
     match request {
-        DaemonRequest::Assess { payload, .. } => {
+        DaemonRequest::Assess { payload, session_id } => {
             let start = Instant::now();
 
-            let assessment = state.engine.assess(&payload).await;
+            // Use the client's session_id for chain tracking isolation
+            let assessment = state.engine.assess_with_session(&payload, session_id.as_deref()).await;
             state.assessment_count.fetch_add(1, Ordering::Relaxed);
 
             let locale = state.engine.locale().clone();
             let output = HookOutput::from_assessment(&assessment, &locale);
             let duration_ms = start.elapsed().as_millis() as u64;
 
-            // Send desktop notification for Medium/High risk
+            // Notification + logging
             crate::notify::notify_assessment(&assessment, &locale);
 
-            // Log assessment to SQLite
             if let Ok(cache) = SqliteCache::open(&config::bark_db_path()) {
                 let log_entry = LogEntry {
                     timestamp: String::new(),
@@ -195,11 +206,9 @@ async fn process_request(
                     reason: assessment.reason.clone(),
                     source: assessment.source.to_string(),
                     duration_ms,
-                    session_id: Some(state.engine.session_id().to_string()),
+                    session_id,
                 };
-                if let Err(e) = cache.log_assessment(&log_entry) {
-                    tracing::warn!("Failed to log assessment: {}", e);
-                }
+                cache.log_assessment(&log_entry).ok();
             }
 
             DaemonResponse::Result {
@@ -210,11 +219,13 @@ async fn process_request(
         DaemonRequest::Status => {
             let uptime_seconds = state.start_time.elapsed().as_secs();
             let assessments = state.assessment_count.load(Ordering::Relaxed);
+            let idle_secs = state.idle_duration().as_secs();
 
             DaemonResponse::Status {
                 uptime_seconds,
                 assessments,
-                cache_entries: 0, // TODO: query cache when available
+                cache_entries: 0,
+                idle_seconds: idle_secs,
             }
         }
         DaemonRequest::Shutdown => {
@@ -223,4 +234,3 @@ async fn process_request(
         }
     }
 }
-

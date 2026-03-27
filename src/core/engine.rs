@@ -258,6 +258,91 @@ impl AssessmentEngine {
         );
     }
 
+    /// Assess with an explicit session ID (used by daemon for per-client isolation).
+    ///
+    /// Each Claude Code window has its own session. The daemon uses this to keep
+    /// chain tracking separate per window, so operations from window A don't
+    /// pollute the chain context of window B.
+    pub async fn assess_with_session(&self, input: &HookInput, session_id: Option<&str>) -> Assessment {
+        let sid = session_id.unwrap_or(&self.session_id);
+        let start = Instant::now();
+
+        let result = self.assess_inner_with_session(input, sid).await;
+        let assessment = result.with_duration(start.elapsed());
+
+        // Record to chain tracker under the caller's session
+        {
+            let mut tracker = self.chain_tracker.lock();
+            tracker.record(
+                sid,
+                &input.tool_name,
+                input.command(),
+                input.file_path(),
+                assessment.level,
+            );
+        }
+
+        if assessment.source != AssessmentSource::Cache {
+            self.cache_result(input, &assessment);
+        }
+
+        assessment
+    }
+
+    /// Inner assess using a specific session ID for chain context.
+    async fn assess_inner_with_session(&self, input: &HookInput, session_id: &str) -> Assessment {
+        let tool_name = input.tool_name.as_str();
+        let command = input.command();
+        let file_path = input.file_path();
+
+        // Layer 1-4 same as assess_inner
+        if let Some(assessment) = fast_rules::fast_check_with_command(tool_name, command, file_path, &self.locale) {
+            return assessment;
+        }
+        {
+            let rules = self.custom_rules.read();
+            if let Some(assessment) = rules.check(tool_name, command, file_path, &self.rule_context) {
+                return assessment;
+            }
+        }
+        if let Some(assessment) = self.cache_lookup(input) {
+            return assessment;
+        }
+        if tool_name == "Bash" {
+            if let Some(cmd) = command {
+                let analyzer = self.bash_analyzer.lock();
+                if let Some(assessment) = analyzer.analyze(cmd) {
+                    return assessment;
+                }
+            }
+        }
+
+        // Layer 5: Chain context with caller's session ID
+        let chain_context = {
+            let tracker = self.chain_tracker.lock();
+            tracker.get_context(session_id)
+        };
+        if let Some(assessment) = self.assess_chain_context(&chain_context) {
+            return assessment;
+        }
+
+        // Layer 6: AI
+        if let Some(ref ai_client) = self.ai_client {
+            match ai_client.assess(input, &chain_context) {
+                Ok(assessment) => return assessment,
+                Err(e) => {
+                    tracing::warn!("AI assessment failed: {}", e);
+                }
+            }
+        }
+
+        let reason = match self.locale {
+            Locale::Zh => format!("未知操作: {} - 需要人工确认", tool_name),
+            Locale::En => format!("Unknown operation: {} - requires human confirmation", tool_name),
+        };
+        Assessment::medium(reason, AssessmentSource::Fallback)
+    }
+
     /// Get the locale.
     pub fn locale(&self) -> &Locale {
         &self.locale

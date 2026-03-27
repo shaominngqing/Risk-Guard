@@ -6,10 +6,27 @@ use crate::config;
 use crate::core::engine::AssessmentEngine;
 use crate::core::protocol::{HookInput, HookOutput};
 
+/// Derive a stable session ID from environment.
+///
+/// Claude Code sets CLAUDE_SESSION_ID or similar env vars per session.
+/// If not available, fall back to parent PID (each Claude Code window
+/// is a separate process tree, so PPID is a reasonable proxy).
+fn get_session_id() -> String {
+    // Try Claude Code's session env vars
+    if let Ok(sid) = std::env::var("CLAUDE_SESSION_ID") {
+        return sid;
+    }
+    // Fallback: use parent PID as session proxy
+    // Different Claude Code windows have different PIDs
+    format!("ppid-{}", std::os::unix::process::parent_id())
+}
+
 /// Run the PreToolUse hook handler.
 ///
-/// Reads JSON from stdin, runs assessment, outputs JSON to stdout.
-/// On ANY error, outputs an allow JSON (never blocks Claude Code).
+/// Flow:
+/// 1. Try daemon (auto-spawn if not running, Unix only)
+/// 2. Fallback to standalone mode
+/// 3. Always output valid JSON, never block Claude Code
 pub fn run() {
     // Read JSON from stdin
     let mut input_json = String::new();
@@ -20,25 +37,21 @@ pub fn run() {
         process::exit(0);
     }
 
-    // Parse the hook input
     let input = match HookInput::from_json(&input_json) {
         Some(input) => input,
         None => {
-            eprintln!("bark: invalid JSON input");
             let output = HookOutput::allow_with_reason("Invalid hook input JSON");
             println!("{}", output.to_json());
             process::exit(0);
         }
     };
 
-    // Build a tokio runtime for async operations
     let rt = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
     {
         Ok(rt) => rt,
-        Err(e) => {
-            eprintln!("bark: failed to create runtime: {}", e);
+        Err(_) => {
             let output = HookOutput::allow_with_reason("Runtime creation failed");
             println!("{}", output.to_json());
             process::exit(0);
@@ -46,52 +59,60 @@ pub fn run() {
     };
 
     let output = rt.block_on(async {
-        // Try daemon first if socket exists (Unix only)
+        // Try daemon first (Unix only)
         #[cfg(unix)]
         {
+            let session_id = get_session_id();
+
+            // Auto-spawn daemon if not running
+            crate::daemon::client::spawn_daemon().ok();
+
             let sock = crate::daemon::client::socket_path();
             if sock.exists() {
-                if let Ok(output) = crate::daemon::client::assess(&sock, &input).await {
+                if let Ok(output) = crate::daemon::client::assess(&sock, &input, &session_id).await {
                     return output;
                 }
             }
         }
 
-        // Standalone mode
-        let cache_path = config::bark_db_path();
-        let toml_path = config::bark_toml_path();
-
-        let engine = AssessmentEngine::new_standalone(
-            Some(toml_path.as_path()),
-            Some(cache_path.as_path()),
-        );
-
-        let assessment = engine.assess(&input).await;
-        let locale = engine.locale().clone();
-
-        // Send desktop notification for Medium/High risk
-        crate::notify::notify_assessment(&assessment, &locale);
-
-        // Log assessment to SQLite
-        if let Ok(cache) = SqliteCache::open(&config::bark_db_path()) {
-            let log_entry = LogEntry {
-                timestamp: String::new(),
-                tool_name: input.tool_name.clone(),
-                command: input.command().map(String::from),
-                file_path: input.file_path().map(String::from),
-                risk_level: assessment.level,
-                reason: assessment.reason.clone(),
-                source: assessment.source.to_string(),
-                duration_ms: assessment.duration.as_millis() as u64,
-                session_id: Some(engine.session_id().to_string()),
-            };
-            if let Err(e) = cache.log_assessment(&log_entry) {
-                eprintln!("bark: failed to log assessment: {}", e);
-            }
-        }
-
-        HookOutput::from_assessment(&assessment, &locale)
+        // Standalone mode fallback
+        run_standalone(&input).await
     });
 
     println!("{}", output.to_json());
+}
+
+/// Run assessment in standalone mode (no daemon).
+async fn run_standalone(input: &HookInput) -> HookOutput {
+    let cache_path = config::bark_db_path();
+    let toml_path = config::bark_toml_path();
+
+    let engine = AssessmentEngine::new_standalone(
+        Some(toml_path.as_path()),
+        Some(cache_path.as_path()),
+    );
+
+    let assessment = engine.assess(input).await;
+    let locale = engine.locale().clone();
+
+    // Notification
+    crate::notify::notify_assessment(&assessment, &locale);
+
+    // Log to SQLite
+    if let Ok(cache) = SqliteCache::open(&config::bark_db_path()) {
+        let log_entry = LogEntry {
+            timestamp: String::new(),
+            tool_name: input.tool_name.clone(),
+            command: input.command().map(String::from),
+            file_path: input.file_path().map(String::from),
+            risk_level: assessment.level,
+            reason: assessment.reason.clone(),
+            source: assessment.source.to_string(),
+            duration_ms: assessment.duration.as_millis() as u64,
+            session_id: Some(engine.session_id().to_string()),
+        };
+        cache.log_assessment(&log_entry).ok();
+    }
+
+    HookOutput::from_assessment(&assessment, &locale)
 }

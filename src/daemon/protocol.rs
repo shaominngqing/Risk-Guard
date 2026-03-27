@@ -40,6 +40,8 @@ pub enum DaemonResponse {
         uptime_seconds: u64,
         assessments: u64,
         cache_entries: u64,
+        #[serde(default)]
+        idle_seconds: u64,
     },
     /// An error occurred processing the request.
     #[serde(rename = "error")]
