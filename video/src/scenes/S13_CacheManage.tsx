@@ -6,7 +6,7 @@ import { Camera, cameraZoomToContent } from '../components/Camera';
 import { ClaudeTerminal, ClaudeActivity, ShellPrompt } from '../components/ClaudeCodeUI';
 import { SceneLabel } from '../components/SceneLabel';
 import { GradientText } from '../components/GradientText';
-import { COLORS, SCENE_DURATIONS } from '../theme';
+import { COLORS } from '../theme';
 
 const ENTRIES = [
   { reason: 'git commit 本地操作', age: '2h ago' },
@@ -19,7 +19,7 @@ export const S13_CacheManage: React.FC = () => {
 
   return (
     <Transition3D type="fadeScale">
-      <Camera keyframes={cameraZoomToContent(SCENE_DURATIONS.cacheManage)}>
+      <Camera keyframes={cameraZoomToContent(3)}>
       <MacDesktop darken={0.4}>
         <SceneLabel text="Cache Management" sub="SQLite缓存管理 · bark cache" color={COLORS.c2} delay={8} />
         <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

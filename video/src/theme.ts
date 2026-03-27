@@ -65,15 +65,13 @@ export const HEIGHT = 1080;
 
 // Scene durations in seconds
 export const SCENE_DURATIONS = {
-  opening: 3,
-  features: 6,       // 6 features × 1s each, one at a time full-screen
-  install: 8,        // platform detect → download binary → bark install → completion banner
-  workflow: 35,      // read-only → edit → AST detection → AI assess + cache → high risk + chain
-  stats: 5,
-  cacheManage: 3,
-  logView: 3,
-  onOff: 4,
-  help: 3,
+  hook: 6,           // pain point — switching windows, pressing y y y
+  intercept: 3,      // transition — "what if safe ops auto-allow?"
+  opening: 3,        // Banner + version
+  features: 6,       // 6 features × 1s each, full-screen
+  install: 6,        // platform detect → download binary → completion
+  workflow: 28,      // read-only → AI assess → cache hit → high risk
+  closing: 3,        // GitHub CTA + star
 } as const;
 
 export const TOTAL_DURATION = Object.values(SCENE_DURATIONS).reduce((a, b) => a + b, 0);

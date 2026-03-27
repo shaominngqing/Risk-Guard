@@ -9,7 +9,6 @@ import { BARK_ASCII, COLORS, SCENE_DURATIONS, FONT_MONO } from '../theme';
 
 const CMD = 'curl -fsSL https://raw.githubusercontent.com/shaominngqing/bark-claude-code-hook/main/install.sh | bash';
 
-// ── Install pipeline rows (matches install.rs completion banner) ──
 const PIPELINE = [
   { label: 'Read-only', tools: 'Read / Grep / Glob', action: 'Allow', color: COLORS.low },
   { label: 'Edits', tools: 'Edit / Write', action: 'Allow', color: COLORS.low },
@@ -18,38 +17,37 @@ const PIPELINE = [
   { label: 'Danger', tools: 'rm -rf / force push', action: 'Block + confirm', color: COLORS.high },
 ];
 
-// Timeline (8s = 240 frames):
-// 0-5:     terminal appears
-// 8-58:    typing curl command (camera zoomed)
-// 58-64:   "enter" pause
-// 64:      output starts, camera pulls back
-// 64-80:   banner lines render fast
-// 82:      subtitle "🐕 AI-Powered... v2.0.2"
-// 86:      "▸ Detect platform"
-// 90:      "✓ macOS aarch64"
-// 94:      "✓ claude CLI"
-// 100:     "▸ Download bark binary"
-// 104-130: progress bar animation
-// 132:     "✓ bark v2.0.2 (3.8MB)"
-// 138:     "▸ Install binary"
-// 142:     "✓ bark → /opt/homebrew/bin/"
-// 148:     completion banner box with pipeline
-// 190:     quick start commands
-// 210-240: hold
+// Timeline (6s = 180 frames) — compressed from 8s
+// 0-3:     terminal appears
+// 5-42:    typing curl command (faster: 3.0x speed)
+// 42-46:   "enter" pause
+// 46:      output starts, camera pulls back
+// 46-58:   banner lines render
+// 60:      subtitle
+// 63:      "▸ Detect platform"
+// 66:      "✓ macOS aarch64" + "✓ claude CLI"
+// 72:      "▸ Download bark binary"
+// 74-94:   progress bar
+// 96:      "✓ bark v2.0.2 (3.8MB)"
+// 100:     "▸ Install binary"
+// 103:     "✓ bark → /opt/homebrew/bin/"
+// 108:     completion banner box
+// 140:     quick start
+// 160-180: hold
 
 export const S02_Install: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // --- Typing ---
-  const typeStart = 8;
+  // --- Typing (faster) ---
+  const typeStart = 5;
   const cmdElapsed = Math.max(0, frame - typeStart);
   let cmdChars = 0;
   let acc = 0;
   for (let i = 0; i < CMD.length; i++) {
     const ch = CMD[i];
     const mult = ch === ' ' ? 0.6 : ch === '/' ? 0.4 : ch === ':' ? 0.5 : 1.0;
-    acc += 1 / (2.2 * mult);
+    acc += 1 / (3.0 * mult);
     if (acc > cmdElapsed) break;
     cmdChars++;
   }
@@ -57,38 +55,37 @@ export const S02_Install: React.FC = () => {
   const typingDone = cmdChars >= CMD.length;
 
   // --- Output timeline ---
-  const outputStart = 64;
+  const outputStart = 46;
   const bannerLines = frame >= outputStart
-    ? Math.min(Math.floor((frame - outputStart) / 1.5) + 1, BARK_ASCII.length)
+    ? Math.min(Math.floor((frame - outputStart) / 1.2) + 1, BARK_ASCII.length)
     : 0;
-  const subtitleFrame = outputStart + Math.ceil(BARK_ASCII.length * 1.5) + 3;
-  const detectFrame = subtitleFrame + 4;
-  const platformOk = detectFrame + 4;
-  const claudeOk = platformOk + 4;
-  const downloadFrame = claudeOk + 4;
-  const progressStart = downloadFrame + 4;
-  const progressEnd = progressStart + 26;
+  const subtitleFrame = outputStart + Math.ceil(BARK_ASCII.length * 1.2) + 2;
+  const detectFrame = subtitleFrame + 3;
+  const platformOk = detectFrame + 3;
+  const claudeOk = platformOk + 3;
+  const downloadFrame = claudeOk + 3;
+  const progressStart = downloadFrame + 2;
+  const progressEnd = progressStart + 20;
   const downloadOk = progressEnd + 2;
-  const installFrame = downloadOk + 6;
-  const installOk = installFrame + 4;
+  const installFrame = downloadOk + 4;
+  const installOk = installFrame + 3;
   const bannerBoxFrame = installOk + 4;
-  const quickStartFrame = bannerBoxFrame + 38;
+  const quickStartFrame = bannerBoxFrame + 30;
 
-  // Progress bar animation
+  // Progress bar
   const progressPct = frame >= progressStart && frame < progressEnd
     ? Math.min(100, Math.floor(((frame - progressStart) / (progressEnd - progressStart)) * 100))
     : frame >= progressEnd ? 100 : 0;
   const progressWidth = 32;
   const filled = Math.floor(progressPct * progressWidth / 100);
-  const empty = progressWidth - filled;
   const sizeMB = (progressPct * 3.8 / 100).toFixed(1);
 
   // --- Camera ---
   const cameraKF: CameraKeyframe[] = [
     { frame: 0, scale: 1.0, x: 0, y: 0 },
-    { frame: 10, scale: 1.5, x: 0, y: 5 },
-    { frame: outputStart - 4, scale: 1.5, x: 0, y: 5 },
-    { frame: outputStart + 10, scale: 1.05, x: 0, y: 0 },
+    { frame: 7, scale: 1.5, x: 0, y: 5 },
+    { frame: outputStart - 3, scale: 1.5, x: 0, y: 5 },
+    { frame: outputStart + 8, scale: 1.05, x: 0, y: 0 },
   ];
 
   // Auto-scroll
@@ -106,7 +103,7 @@ export const S02_Install: React.FC = () => {
   if (frame >= installOk) contentH += LINE;
   if (frame >= bannerBoxFrame) contentH += LINE * 9;
   if (frame >= quickStartFrame) contentH += LINE * 5;
-  const VISIBLE = 620;
+  const VISIBLE = 580;
   const scrollY = Math.min(0, VISIBLE - contentH);
 
   return (
@@ -114,7 +111,7 @@ export const S02_Install: React.FC = () => {
       <Camera keyframes={cameraKF}>
       <MacDesktop darken={0.4}>
         <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <ClaudeTerminal width={1200} height={700} enterDelay={3}>
+          <ClaudeTerminal width={1200} height={660} enterDelay={2}>
             <div style={{
               transform: `translateY(${scrollY}px)`,
               transition: 'transform 0.3s ease-out',
@@ -133,7 +130,7 @@ export const S02_Install: React.FC = () => {
               )}
             </div>
 
-            {/* ── Banner (block pixel art) ── */}
+            {/* Banner */}
             {bannerLines > 0 && (
               <div style={{ fontSize: 12, lineHeight: 1.15, margin: '6px 0' }}>
                 {BARK_ASCII.slice(0, bannerLines).map((line, i) => (
@@ -145,12 +142,12 @@ export const S02_Install: React.FC = () => {
               </div>
             )}
             {frame >= subtitleFrame && (
-              <div style={{ color: '#888', fontStyle: 'italic', fontSize: 13, marginBottom: 8 }}>
+              <div style={{ color: '#888', fontStyle: 'italic', fontSize: 13, marginBottom: 6 }}>
                 AI-Powered Risk Assessment for Claude Code v2.0.2
               </div>
             )}
 
-            {/* ── Detect platform ── */}
+            {/* Detect platform */}
             {frame >= detectFrame && (
               <ClaudeActivity delay={detectFrame} style={{ marginBottom: 2 }}>
                 <span style={{ color: COLORS.c1, fontWeight: 700 }}>  ▸ </span>
@@ -168,14 +165,13 @@ export const S02_Install: React.FC = () => {
               </ClaudeActivity>
             )}
 
-            {/* ── Download binary ── */}
+            {/* Download binary */}
             {frame >= downloadFrame && (
-              <ClaudeActivity delay={downloadFrame} style={{ marginTop: 6, marginBottom: 2 }}>
+              <ClaudeActivity delay={downloadFrame} style={{ marginTop: 4, marginBottom: 2 }}>
                 <span style={{ color: COLORS.c1, fontWeight: 700 }}>  ▸ </span>
                 <span style={{ fontWeight: 700 }}>Download bark binary</span>
               </ClaudeActivity>
             )}
-            {/* Progress bar */}
             {frame >= progressStart && frame < downloadOk && (
               <div style={{ paddingLeft: 20, fontSize: 13, fontFamily: FONT_MONO }}>
                 <span>  </span>
@@ -192,9 +188,9 @@ export const S02_Install: React.FC = () => {
               </ClaudeActivity>
             )}
 
-            {/* ── Install binary ── */}
+            {/* Install binary */}
             {frame >= installFrame && (
-              <ClaudeActivity delay={installFrame} style={{ marginTop: 6, marginBottom: 2 }}>
+              <ClaudeActivity delay={installFrame} style={{ marginTop: 4, marginBottom: 2 }}>
                 <span style={{ color: COLORS.c1, fontWeight: 700 }}>  ▸ </span>
                 <span style={{ fontWeight: 700 }}>Install binary</span>
               </ClaudeActivity>
@@ -205,9 +201,9 @@ export const S02_Install: React.FC = () => {
               </ClaudeActivity>
             )}
 
-            {/* ── Completion banner box ── */}
+            {/* Completion banner */}
             {frame >= bannerBoxFrame && (
-              <ClaudeActivity delay={bannerBoxFrame} style={{ marginTop: 10 }}>
+              <ClaudeActivity delay={bannerBoxFrame} style={{ marginTop: 8 }}>
                 <div style={{ color: '#555', fontSize: 13 }}>  ╭{'─'.repeat(48)}╮</div>
                 <div style={{ color: '#555', fontSize: 13, display: 'flex' }}>
                   <span>  │ </span>
@@ -220,7 +216,7 @@ export const S02_Install: React.FC = () => {
                 </div>
                 <div style={{ color: '#555', fontSize: 13 }}>  ├{'─'.repeat(48)}┤</div>
                 {PIPELINE.map((row, i) => {
-                  const d = bannerBoxFrame + 4 + i * 3;
+                  const d = bannerBoxFrame + 3 + i * 2;
                   return frame >= d ? (
                     <ClaudeActivity key={i} delay={d}>
                       <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -234,21 +230,18 @@ export const S02_Install: React.FC = () => {
                     </ClaudeActivity>
                   ) : null;
                 })}
-                {frame >= bannerBoxFrame + 20 && (
+                {frame >= bannerBoxFrame + 16 && (
                   <div style={{ color: '#555', fontSize: 13 }}>  ╰{'─'.repeat(48)}╯</div>
                 )}
               </ClaudeActivity>
             )}
 
-            {/* ── Quick start ── */}
+            {/* Quick start */}
             {frame >= quickStartFrame && (
-              <ClaudeActivity delay={quickStartFrame} style={{ marginTop: 8 }}>
-                <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 13 }}>  Quick Start</div>
+              <ClaudeActivity delay={quickStartFrame} style={{ marginTop: 6 }}>
+                <div style={{ fontWeight: 700, marginBottom: 3, fontSize: 13 }}>  Quick Start</div>
                 <div style={{ fontSize: 13, paddingLeft: 16, color: '#888' }}>
                   <span style={{ color: COLORS.c2 }}>bark</span> help{'           '}Show all commands
-                </div>
-                <div style={{ fontSize: 13, paddingLeft: 16, color: '#888' }}>
-                  <span style={{ color: COLORS.c2 }}>bark</span> stats{'          '}Statistics dashboard
                 </div>
                 <div style={{ fontSize: 13, paddingLeft: 16, color: '#888' }}>
                   <span style={{ color: COLORS.c2 }}>bark</span> test rm -rf /{'  '}Test any command
@@ -256,7 +249,7 @@ export const S02_Install: React.FC = () => {
               </ClaudeActivity>
             )}
 
-            </div>{/* end scroll wrapper */}
+            </div>
           </ClaudeTerminal>
         </AbsoluteFill>
       </MacDesktop>

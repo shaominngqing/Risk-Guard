@@ -8,7 +8,7 @@ import { SceneLabel } from '../components/SceneLabel';
 import { GradientText } from '../components/GradientText';
 import { ProgressBar } from '../components/ProgressBar';
 import { AnimatedNumber } from '../components/AnimatedNumber';
-import { COLORS, SCENE_DURATIONS } from '../theme';
+import { COLORS } from '../theme';
 
 const TOTAL = 247;
 const SOURCES = [
@@ -30,7 +30,7 @@ export const S12_Stats: React.FC = () => {
 
   return (
     <Transition3D type="pivotLeft">
-      <Camera keyframes={cameraSteadyZoom(SCENE_DURATIONS.stats)}>
+      <Camera keyframes={cameraSteadyZoom(5)}>
       <MacDesktop darken={0.4}>
         <SceneLabel text="Statistics Dashboard" sub="统计仪表板 · bark stats" color={COLORS.c2} delay={8} />
         <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

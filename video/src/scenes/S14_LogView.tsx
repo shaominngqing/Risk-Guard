@@ -6,7 +6,7 @@ import { Camera, cameraZoomToContent } from '../components/Camera';
 import { ClaudeTerminal, ClaudeActivity, ShellPrompt } from '../components/ClaudeCodeUI';
 import { SceneLabel } from '../components/SceneLabel';
 import { GradientText } from '../components/GradientText';
-import { COLORS, SCENE_DURATIONS } from '../theme';
+import { COLORS } from '../theme';
 
 const LOGS = [
   { level: 'LOW', color: COLORS.low, time: '14:23', source: 'FAST', tool: 'Read', cmd: 'src/main.ts' },
@@ -23,7 +23,7 @@ export const S14_LogView: React.FC = () => {
 
   return (
     <Transition3D type="rotateIn">
-      <Camera keyframes={cameraZoomToContent(SCENE_DURATIONS.logView)}>
+      <Camera keyframes={cameraZoomToContent(3)}>
       <MacDesktop darken={0.4}>
         <SceneLabel text="Log Viewer" sub="日志查看 · bark log" color={COLORS.gradientMid} delay={8} />
         <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

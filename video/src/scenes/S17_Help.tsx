@@ -6,7 +6,7 @@ import { Camera, cameraSteadyZoom } from '../components/Camera';
 import { ClaudeTerminal, ClaudeActivity, ShellPrompt } from '../components/ClaudeCodeUI';
 import { CharGradientLine } from '../components/GradientText';
 import { SceneLabel } from '../components/SceneLabel';
-import { BARK_ASCII_SMALL, COLORS, SCENE_DURATIONS } from '../theme';
+import { BARK_ASCII_SMALL, COLORS } from '../theme';
 
 const HELP = [
   { cmd: 'status', desc: 'Show daemon & hook status' },
@@ -29,7 +29,7 @@ export const S17_Help: React.FC = () => {
 
   return (
     <Transition3D type="rotateIn">
-      <Camera keyframes={cameraSteadyZoom(SCENE_DURATIONS.help)}>
+      <Camera keyframes={cameraSteadyZoom(3)}>
       <MacDesktop darken={0.4}>
         <SceneLabel text="Command List" sub="完整命令 · bark help" color={COLORS.gradientStart} delay={8} />
         <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
