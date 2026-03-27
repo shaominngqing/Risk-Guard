@@ -17,8 +17,14 @@ fn get_session_id() -> String {
         return sid;
     }
     // Fallback: use parent PID as session proxy
-    // Different Claude Code windows have different PIDs
-    format!("ppid-{}", std::os::unix::process::parent_id())
+    #[cfg(unix)]
+    {
+        format!("ppid-{}", std::os::unix::process::parent_id())
+    }
+    #[cfg(not(unix))]
+    {
+        format!("pid-{}", std::process::id())
+    }
 }
 
 /// Run the PreToolUse hook handler.
