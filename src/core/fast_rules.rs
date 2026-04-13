@@ -57,6 +57,7 @@ const SAFE_BASH_COMMANDS: &[&str] = &[
     "ps", "top", "htop", "pgrep",
     "git status", "git log", "git diff", "git branch", "git show",
     "git remote", "git tag", "git stash list", "git blame",
+    "git fetch", "git pull", "git stash", "git stash pop", "git stash drop",
     "cargo check", "cargo test", "cargo build", "cargo clippy", "cargo fmt",
     "npm test", "npm run lint", "npm run check", "npm run build",
     "yarn test", "yarn lint", "yarn build",
@@ -74,7 +75,8 @@ const SAFE_BASH_PREFIXES: &[&str] = &[
     "grep ", "rg ", "find ", "fd ", "tree ", "wc ",
     "diff ", "file ", "stat ", "du ", "df ",
     "git status", "git log", "git diff", "git show", "git branch",
-    "git blame", "git remote", "git tag",
+    "git blame", "git remote", "git tag", "git fetch", "git pull",
+    "git stash",
     "cargo check", "cargo test", "cargo build", "cargo clippy", "cargo fmt",
     "npm test", "npm run ",
     "make ", "man ", "which ", "type ",
@@ -131,9 +133,8 @@ pub fn fast_check_with_command(
         if let Some(cmd) = command {
             let trimmed = cmd.trim();
 
-            // Reject anything with pipes to suspicious sinks or dangerous operators
+            // Reject anything with pipes, subshells, or redirects — these need deeper analysis
             if trimmed.contains(" | ")
-                || trimmed.contains(" && ")
                 || trimmed.contains(" ; ")
                 || trimmed.contains("$(")
                 || trimmed.contains('`')
@@ -144,27 +145,26 @@ pub fn fast_check_with_command(
                 return None;
             }
 
-            // Check exact match
-            if SAFE_BASH_COMMANDS.contains(&trimmed) {
-                return Some(Assessment::low(
-                    format!("{}: {}", locale.t("risk.safe_cmd"), trimmed),
-                    AssessmentSource::FastRule,
-                ));
-            }
-
-            // Check prefix match (e.g., "ls -la /tmp" starts with "ls ")
-            for prefix in SAFE_BASH_PREFIXES {
-                if trimmed.starts_with(prefix) {
+            // For `&&` chains (e.g., `cd /path && git diff`), check if ALL parts are safe.
+            // This is by far the most common compound command pattern in Claude Code.
+            if trimmed.contains(" && ") {
+                let parts: Vec<&str> = trimmed.split(" && ").collect();
+                let all_safe = parts.iter().all(|part| {
+                    let p = part.trim();
+                    is_safe_single_command(p)
+                });
+                if all_safe {
                     return Some(Assessment::low(
                         format!("{}: {}", locale.t("risk.safe_cmd"), first_n_chars(trimmed, 40)),
                         AssessmentSource::FastRule,
                     ));
                 }
+                // At least one part is not safe — defer to deeper analysis
+                return None;
             }
 
-            // Extract first word and check
-            let first_word = trimmed.split_whitespace().next().unwrap_or("");
-            if SAFE_BASH_COMMANDS.contains(&first_word) {
+            // Single command: check exact match, prefix match, then first-word match
+            if is_safe_single_command(trimmed) {
                 return Some(Assessment::low(
                     format!("{}: {}", locale.t("risk.safe_cmd"), first_n_chars(trimmed, 40)),
                     AssessmentSource::FastRule,
@@ -195,6 +195,34 @@ pub fn fast_check_with_command(
 
     // 5. Unknown tool → defer to deeper analysis
     None
+}
+
+/// Check if a single (non-compound) command is safe.
+fn is_safe_single_command(cmd: &str) -> bool {
+    // Exact match
+    if SAFE_BASH_COMMANDS.contains(&cmd) {
+        return true;
+    }
+
+    // `cd` with a path is always safe (just changes directory)
+    if cmd == "cd" || cmd.starts_with("cd ") {
+        return true;
+    }
+
+    // Prefix match (e.g., "ls -la /tmp" starts with "ls ")
+    for prefix in SAFE_BASH_PREFIXES {
+        if cmd.starts_with(prefix) {
+            return true;
+        }
+    }
+
+    // First-word match
+    let first_word = cmd.split_whitespace().next().unwrap_or("");
+    if SAFE_BASH_COMMANDS.contains(&first_word) {
+        return true;
+    }
+
+    false
 }
 
 /// Check if a file path matches any sensitive pattern.
@@ -343,6 +371,93 @@ mod tests {
     fn test_bash_cat_file() {
         let result = fast_check_with_command("Bash", Some("cat README.md"), None, &Locale::En);
         assert!(result.is_some());
+        assert_eq!(result.unwrap().level, RiskLevel::Low);
+    }
+
+    // --- Regression tests for && compound commands ---
+
+    #[test]
+    fn test_bash_cd_and_git_diff() {
+        let result = fast_check_with_command(
+            "Bash",
+            Some("cd /Users/user/project && git diff main...HEAD"),
+            None,
+            &Locale::En,
+        );
+        assert!(result.is_some(), "cd && git diff should be fast-ruled safe");
+        assert_eq!(result.unwrap().level, RiskLevel::Low);
+    }
+
+    #[test]
+    fn test_bash_cd_and_git_status() {
+        let result = fast_check_with_command(
+            "Bash",
+            Some("cd /some/path && git status"),
+            None,
+            &Locale::En,
+        );
+        assert!(result.is_some(), "cd && git status should be fast-ruled safe");
+        assert_eq!(result.unwrap().level, RiskLevel::Low);
+    }
+
+    #[test]
+    fn test_bash_cd_and_git_log() {
+        let result = fast_check_with_command(
+            "Bash",
+            Some("cd /some/path && git log --oneline -10"),
+            None,
+            &Locale::En,
+        );
+        assert!(result.is_some(), "cd && git log should be fast-ruled safe");
+        assert_eq!(result.unwrap().level, RiskLevel::Low);
+    }
+
+    #[test]
+    fn test_bash_cd_and_git_fetch() {
+        let result = fast_check_with_command(
+            "Bash",
+            Some("cd /project && git fetch origin"),
+            None,
+            &Locale::En,
+        );
+        assert!(result.is_some(), "cd && git fetch should be fast-ruled safe");
+        assert_eq!(result.unwrap().level, RiskLevel::Low);
+    }
+
+    #[test]
+    fn test_bash_cd_and_unsafe_still_deferred() {
+        let result = fast_check_with_command(
+            "Bash",
+            Some("cd /tmp && rm -rf *"),
+            None,
+            &Locale::En,
+        );
+        assert!(result.is_none(), "cd && rm -rf should NOT be fast-ruled safe");
+    }
+
+    #[test]
+    fn test_bash_multiple_safe_and_chain() {
+        let result = fast_check_with_command(
+            "Bash",
+            Some("cd /project && git fetch && git diff origin/main"),
+            None,
+            &Locale::En,
+        );
+        assert!(result.is_some(), "cd && git fetch && git diff should be safe");
+        assert_eq!(result.unwrap().level, RiskLevel::Low);
+    }
+
+    #[test]
+    fn test_bash_git_fetch_safe() {
+        let result = fast_check_with_command("Bash", Some("git fetch origin"), None, &Locale::En);
+        assert!(result.is_some(), "git fetch should be safe");
+        assert_eq!(result.unwrap().level, RiskLevel::Low);
+    }
+
+    #[test]
+    fn test_bash_git_pull_safe() {
+        let result = fast_check_with_command("Bash", Some("git pull"), None, &Locale::En);
+        assert!(result.is_some(), "git pull should be safe");
         assert_eq!(result.unwrap().level, RiskLevel::Low);
     }
 }

